@@ -1,0 +1,27 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: jdbc:h2:mem:userdb;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+
+# Seed the demo users (claimant1/2, staff1/2, manager1) when the users table is empty; set false in production.
+chubb:
+  seed-demo-users: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

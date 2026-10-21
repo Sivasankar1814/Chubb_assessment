@@ -1,0 +1,70 @@
+server:
+  port: 8080
+
+# Downstream base URLs (override per environment, e.g. SERVICES_CLAIM_URL=http://claim:8083)
+services:
+  user:
+    url: ${SERVICES_USER_URL:http://localhost:8081}
+  claim:
+    url: ${SERVICES_CLAIM_URL:http://localhost:8083}
+  workload:
+    url: ${SERVICES_WORKLOAD_URL:http://localhost:8084}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        # ---- business APIs (Authorization header is forwarded untouched; each service validates the JWT) ----
+        - id: user-service
+          uri: ${services.user.url}
+          predicates:
+            - Path=/api/users/**,/api/auth/**
+        - id: claim-service
+          uri: ${services.claim.url}
+          predicates:
+            - Path=/api/claims/**
+        - id: workload-service
+          uri: ${services.workload.url}
+          predicates:
+            - Path=/api/workload/**
+        # ---- OpenAPI documents, aggregated in the gateway's Swagger UI ----
+        - id: user-docs
+          uri: ${services.user.url}
+          predicates:
+            - Path=/docs/user-service/v3/api-docs
+          filters:
+            - StripPrefix=2
+            - PreserveHostHeader
+        - id: claim-docs
+          uri: ${services.claim.url}
+          predicates:
+            - Path=/docs/claim-service/v3/api-docs
+          filters:
+            - StripPrefix=2
+            - PreserveHostHeader
+        - id: workload-docs
+          uri: ${services.workload.url}
+          predicates:
+            - Path=/docs/workload-service/v3/api-docs
+          filters:
+            - StripPrefix=2
+            - PreserveHostHeader
+
+springdoc:
+  swagger-ui:
+    persist-authorization: true
+    urls:
+      - name: user-service
+        url: /docs/user-service/v3/api-docs
+      - name: claim-service
+        url: /docs/claim-service/v3/api-docs
+      - name: workload-service
+        url: /docs/workload-service/v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
