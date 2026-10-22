@@ -1,0 +1,185 @@
+{
+  "_readme": [
+    "Sample request bodies for testing through the gateway (http://localhost:8080) or Swagger UI (http://localhost:8080/swagger-ui.html).",
+    "Each entry lists the HTTP call, who may make it (login first with the 'login' payloads) and the JSON body.",
+    "Send the returned accessToken as 'Authorization: Bearer <token>'.",
+    "Demo user ids (reset on every restart): claimant1=1, claimant2=2, staff1=3, staff2=4, manager1=5.",
+    "Suggested order: login -> createClaim -> pickUp/assign -> status moves -> history -> workload."
+  ],
+
+  "login": {
+    "claimant1": { "call": "POST /api/auth/login", "body": { "username": "claimant1", "password": "claimant123" } },
+    "claimant2": { "call": "POST /api/auth/login", "body": { "username": "claimant2", "password": "claimant123" } },
+    "staff1": { "call": "POST /api/auth/login", "body": { "username": "staff1", "password": "staff123" } },
+    "staff2": { "call": "POST /api/auth/login", "body": { "username": "staff2", "password": "staff123" } },
+    "manager1": { "call": "POST /api/auth/login", "body": { "username": "manager1", "password": "manager123" } }
+  },
+
+  "users": {
+    "createClaimant": {
+      "call": "POST /api/users  (STAFF or MANAGER)",
+      "body": {
+        "username": "claimant3",
+        "password": "claimant123",
+        "role": "CLAIMANT",
+        "fullName": "Mei Chen",
+        "email": "mei.chen@example.com",
+        "phone": "+65-91234567",
+        "country": "Singapore",
+        "policyNumber": "POL-SG-1003"
+      }
+    },
+    "createStaff": {
+      "call": "POST /api/users  (MANAGER only)",
+      "body": {
+        "username": "staff3",
+        "password": "staff123",
+        "role": "STAFF",
+        "fullName": "Ravi Kumar",
+        "email": "ravi.kumar@chubb.example.com",
+        "specialization": "PROPERTY",
+        "maxCapacity": 6
+      }
+    },
+    "updateStaff": {
+      "call": "PUT /api/users/4  (MANAGER only)",
+      "body": {
+        "fullName": "Daniel Chen",
+        "email": "daniel.chen@chubb.example.com",
+        "active": true,
+        "specialization": "MOTOR",
+        "maxCapacity": 10
+      }
+    }
+  },
+
+  "claims": {
+    "createHealth": {
+      "call": "POST /api/claims  (CLAIMANT files for themselves)",
+      "body": {
+        "claimType": "HEALTH",
+        "description": "Hospitalisation for appendectomy, 3 nights",
+        "claimAmount": 4200.50,
+        "incidentDate": "2026-10-10"
+      }
+    },
+    "createMotor": {
+      "call": "POST /api/claims  (CLAIMANT)",
+      "body": {
+        "claimType": "MOTOR",
+        "description": "Rear-ended at traffic light, bumper and boot damage",
+        "claimAmount": 1500.00,
+        "incidentDate": "2026-10-15"
+      }
+    },
+    "createTravelOnBehalf": {
+      "call": "POST /api/claims  (STAFF or MANAGER files for a claimant; claimantId is required)",
+      "body": {
+        "claimantId": 2,
+        "claimType": "TRAVEL",
+        "description": "Cancelled flight to Tokyo, non-refundable hotel booking",
+        "claimAmount": 980.00,
+        "incidentDate": "2026-10-05"
+      }
+    },
+    "createProperty": {
+      "call": "POST /api/claims  (CLAIMANT)",
+      "body": {
+        "claimType": "PROPERTY",
+        "description": "Water damage to living room ceiling after pipe burst",
+        "claimAmount": 7800.00,
+        "incidentDate": "2026-10-18"
+      }
+    },
+    "createLiability": {
+      "call": "POST /api/claims  (CLAIMANT)",
+      "body": {
+        "claimType": "LIABILITY",
+        "description": "Visitor slipped on wet floor at insured premises",
+        "claimAmount": 12000.00,
+        "incidentDate": "2026-10-12"
+      }
+    }
+  },
+
+  "assignment": {
+    "assignToStaff1": {
+      "call": "PUT /api/claims/{id}/assignment  (MANAGER only; staffId must be a STAFF user id: 3 or 4)",
+      "body": { "staffId": 3, "remarks": "Health specialist" }
+    },
+    "assignToStaff2": {
+      "call": "PUT /api/claims/{id}/assignment  (MANAGER only)",
+      "body": { "staffId": 4, "remarks": "Motor specialist" }
+    }
+  },
+
+  "status": {
+    "_note": "PATCH /api/claims/{id}/status (STAFF on own or unassigned OPEN claims, MANAGER on any). A staff update on an unassigned OPEN claim picks it up automatically. Flow: OPEN -> ASSIGNED -> UNDER_REVIEW -> APPROVED|REJECTED; APPROVED -> SETTLED -> CLOSED; REJECTED -> CLOSED.",
+    "startReview": { "status": "UNDER_REVIEW", "remarks": "Documents received, starting review" },
+    "approve": { "status": "APPROVED", "remarks": "Claim verified against policy" },
+    "reject": { "status": "REJECTED", "remarks": "Incident not covered under policy section 4.2" },
+    "settle": { "status": "SETTLED", "remarks": "Payment released" },
+    "close": { "status": "CLOSED", "remarks": "File closed" }
+  },
+
+  "queries": {
+    "getClaim": "GET /api/claims/1",
+    "history": "GET /api/claims/1/history",
+    "listAll": "GET /api/claims",
+    "listOpen": "GET /api/claims?status=OPEN",
+    "listForStaff": "GET /api/claims?assignedStaffId=3",
+    "listForClaimant": "GET /api/claims?claimantId=1  (STAFF or MANAGER)",
+    "workloadAllStaff": "GET /api/workload  (STAFF or MANAGER)",
+    "workloadOneStaff": "GET /api/workload/3",
+    "workloadSuggestion": "GET /api/workload/suggestion",
+    "users": "GET /api/users?role=STAFF&active=true",
+    "me": "GET /api/users/me"
+  },
+
+  "negativeTests": {
+    "_note": "Each of these should fail; the expected status is listed.",
+    "createClaimZeroAmount": {
+      "call": "POST /api/claims  -> 400 Validation failed",
+      "body": { "claimType": "MOTOR", "description": "Zero amount", "claimAmount": 0, "incidentDate": "2026-10-15" }
+    },
+    "createClaimFutureDate": {
+      "call": "POST /api/claims  -> 400 Validation failed",
+      "body": { "claimType": "MOTOR", "description": "Future incident", "claimAmount": 100, "incidentDate": "2030-01-01" }
+    },
+    "createClaimBlankDescription": {
+      "call": "POST /api/claims  -> 400 Validation failed",
+      "body": { "claimType": "HEALTH", "description": "", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "createClaimUnknownType": {
+      "call": "POST /api/claims  -> 400 malformed request",
+      "body": { "claimType": "PET", "description": "Unknown type", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "assignToClaimant": {
+      "call": "PUT /api/claims/{id}/assignment  -> 409 User ... is not a staff member",
+      "body": { "staffId": 1 }
+    },
+    "assignToUnknownUser": {
+      "call": "PUT /api/claims/{id}/assignment  -> 404",
+      "body": { "staffId": 999 }
+    },
+    "rejectWithoutRemarks": {
+      "call": "PATCH /api/claims/{id}/status on an UNDER_REVIEW claim  -> 409 Remarks are mandatory",
+      "body": { "status": "REJECTED" }
+    },
+    "illegalTransition": {
+      "call": "PATCH /api/claims/{id}/status on an OPEN claim  -> 409 Cannot move claim from OPEN to APPROVED",
+      "body": { "status": "APPROVED" }
+    },
+    "setAssignedViaStatus": {
+      "call": "PATCH /api/claims/{id}/status  -> 409 Use the assignment endpoint",
+      "body": { "status": "ASSIGNED" }
+    },
+    "wrongPassword": {
+      "call": "POST /api/auth/login  -> 401 Invalid username or password",
+      "body": { "username": "claimant1", "password": "wrong" }
+    },
+    "claimantCannotAssign": "PUT /api/claims/{id}/assignment as claimant1  -> 403",
+    "staffNotAssigned": "PATCH /api/claims/{id}/status as staff2 on a claim assigned to staff1  -> 403 Claim is not assigned to you",
+    "noToken": "GET /api/claims without Authorization header  -> 401"
+  }
+}
