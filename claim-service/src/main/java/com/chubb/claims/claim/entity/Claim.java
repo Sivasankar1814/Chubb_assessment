@@ -17,7 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/** claimantId / assignedStaffId reference rows owned by other services, so they are plain columns, not joins. */
+/** claimantId / assignedOfficerId reference rows owned by other services, so they are plain columns, not joins. */
 @Entity
 @Table(name = "claims")
 public class Claim {
@@ -49,7 +49,7 @@ public class Claim {
     @Column(nullable = false, length = 20)
     private ClaimStatus status;
 
-    private Long assignedStaffId;
+    private Long assignedOfficerId;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -76,8 +76,8 @@ public class Claim {
         this.claimNumber = "CLM-%d-%06d".formatted(LocalDate.now().getYear(), id);
     }
 
-    public void assignTo(Long staffId, ClaimStatus newStatus) {
-        this.assignedStaffId = staffId;
+    public void assignTo(Long officerId, ClaimStatus newStatus) {
+        this.assignedOfficerId = officerId;
         this.status = newStatus;
     }
 
@@ -128,8 +128,8 @@ public class Claim {
         return status;
     }
 
-    public Long getAssignedStaffId() {
-        return assignedStaffId;
+    public Long getAssignedOfficerId() {
+        return assignedOfficerId;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/users")
-@Tag(name = "Users", description = "One place for every user: claimants, claims staff and managers")
+@Tag(name = "Users", description = "One place for every user: claimants, claims officers and managers")
 public class UserController {
 
     private final UserService service;
@@ -37,16 +37,16 @@ public class UserController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('STAFF','MANAGER')")
-    @Operation(summary = "Create a user (manager: any role; staff: claimants only)")
+    @PreAuthorize("hasAnyRole('OFFICER','MANAGER')")
+    @Operation(summary = "Create a user (manager: any role; officer: claimants only)")
     public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request, Authentication auth) {
         User created = service.create(request, hasRole(auth, "MANAGER"));
         return ResponseEntity.created(URI.create("/api/users/" + created.getId())).body(UserResponse.from(created));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('STAFF','MANAGER')")
-    @Operation(summary = "List users, optionally filtered by role and active flag (staff / manager)")
+    @PreAuthorize("hasAnyRole('OFFICER','MANAGER')")
+    @Operation(summary = "List users, optionally filtered by role and active flag (officer / manager)")
     public List<UserResponse> list(@RequestParam(required = false) Role role,
                                    @RequestParam(required = false) Boolean active) {
         return service.search(role, active).stream().map(UserResponse::from).toList();
@@ -86,7 +86,7 @@ public class UserController {
     }
 
     private User authorizeAccess(User user, Authentication auth) {
-        boolean privileged = hasRole(auth, "STAFF") || hasRole(auth, "MANAGER");
+        boolean privileged = hasRole(auth, "OFFICER") || hasRole(auth, "MANAGER");
         if (!privileged && !user.getUsername().equals(auth.getName())) {
             throw new AccessDeniedException("You can only access your own profile");
         }

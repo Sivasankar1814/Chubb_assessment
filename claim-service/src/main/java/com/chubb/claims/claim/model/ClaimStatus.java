@@ -9,7 +9,7 @@ import java.util.Set;
 public enum ClaimStatus {
     OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED, SETTLED, CLOSED;
 
-    /** Statuses in which a claim counts towards a staff member's workload. */
+    /** Statuses in which a claim counts towards an officer's workload. */
     public static final Set<ClaimStatus> IN_PROGRESS = EnumSet.of(ASSIGNED, UNDER_REVIEW);
 
     private static final Map<ClaimStatus, Set<ClaimStatus>> TRANSITIONS = new EnumMap<>(ClaimStatus.class);

@@ -42,8 +42,8 @@ class UserServiceTest {
                 "+65-91234567", null, "Singapore", "POL-1", null, null);
     }
 
-    private CreateUserRequest staff() {
-        return new CreateUserRequest("asmith", "secret1", Role.STAFF, "Anna Smith", "anna@chubb.example.com",
+    private CreateUserRequest officer() {
+        return new CreateUserRequest("asmith", "secret1", Role.OFFICER, "Anna Smith", "anna@chubb.example.com",
                 null, null, null, null, "PROPERTY", 6);
     }
 
@@ -54,13 +54,13 @@ class UserServiceTest {
     }
 
     @Test
-    void managerCreatesStaffWithHashedPasswordAndDefaultsToActive() {
+    void managerCreatesOfficerWithHashedPasswordAndDefaultsToActive() {
         when(repository.findByUsername("asmith")).thenReturn(Optional.empty());
         when(repository.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
 
-        User created = service().create(staff(), true);
+        User created = service().create(officer(), true);
 
-        assertThat(created.getRole()).isEqualTo(Role.STAFF);
+        assertThat(created.getRole()).isEqualTo(Role.OFFICER);
         assertThat(created.isActive()).isTrue();
         assertThat(created.getSpecialization()).isEqualTo("PROPERTY");
         assertThat(created.getMaxCapacity()).isEqualTo(6);
@@ -70,7 +70,7 @@ class UserServiceTest {
     }
 
     @Test
-    void staffMayRegisterClaimants() {
+    void officerMayRegisterClaimants() {
         when(repository.findByUsername("jdoe")).thenReturn(Optional.empty());
         when(repository.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
 
@@ -81,8 +81,8 @@ class UserServiceTest {
     }
 
     @Test
-    void staffCannotCreateStaffOrManagers() {
-        assertThatThrownBy(() -> service().create(staff(), false)).isInstanceOf(AccessDeniedException.class);
+    void officerCannotCreateOfficerOrManagers() {
+        assertThatThrownBy(() -> service().create(officer(), false)).isInstanceOf(AccessDeniedException.class);
         verify(repository, never()).save(any(User.class));
     }
 
@@ -98,13 +98,13 @@ class UserServiceTest {
     void roleSpecificFieldsAreMandatory() {
         CreateUserRequest claimantWithoutPolicy = new CreateUserRequest("c", "secret1", Role.CLAIMANT, "C",
                 "c@example.com", null, null, "Japan", null, null, null);
-        CreateUserRequest staffWithoutCapacity = new CreateUserRequest("s", "secret1", Role.STAFF, "S",
+        CreateUserRequest officerWithoutCapacity = new CreateUserRequest("s", "secret1", Role.OFFICER, "S",
                 "s@example.com", null, null, null, null, "MOTOR", null);
         when(repository.findByUsername(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service().create(claimantWithoutPolicy, true))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("policyNumber");
-        assertThatThrownBy(() -> service().create(staffWithoutCapacity, true))
+        assertThatThrownBy(() -> service().create(officerWithoutCapacity, true))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("maxCapacity");
     }
 
@@ -118,15 +118,15 @@ class UserServiceTest {
 
     @Test
     void searchPassesFiltersThrough() {
-        when(repository.search(Role.STAFF, true)).thenReturn(List.of(user(3, Role.STAFF)));
+        when(repository.search(Role.OFFICER, true)).thenReturn(List.of(user(3, Role.OFFICER)));
 
-        assertThat(service().search(Role.STAFF, true)).hasSize(1);
+        assertThat(service().search(Role.OFFICER, true)).hasSize(1);
     }
 
     @Test
     void updateChangesProfileAndOnlyRehashesWhenPasswordGiven() {
-        User existing = user(4, Role.STAFF);
-        existing.setStaffDetails("MOTOR", 8);
+        User existing = user(4, Role.OFFICER);
+        existing.setOfficerDetails("MOTOR", 8);
         when(repository.findById(4L)).thenReturn(Optional.of(existing));
         when(repository.save(any(User.class))).thenAnswer(call -> call.getArgument(0));
 

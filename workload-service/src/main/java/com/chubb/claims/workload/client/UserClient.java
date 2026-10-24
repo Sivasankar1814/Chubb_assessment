@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 public interface UserClient {
 
     @GetMapping("/api/users")
-    List<StaffSummary> list(@RequestParam("role") String role, @RequestParam("active") Boolean active);
+    List<OfficerSummary> list(@RequestParam("role") String role, @RequestParam("active") Boolean active);
 
     @GetMapping("/api/users/{id}")
-    StaffSummary getById(@PathVariable("id") Long id);
+    OfficerSummary getById(@PathVariable("id") Long id);
 
-    record StaffSummary(Long id, String fullName, String role, String specialization, int maxCapacity,
+    record OfficerSummary(Long id, String fullName, String role, String specialization, int maxCapacity,
                         boolean active) {
     }
 }

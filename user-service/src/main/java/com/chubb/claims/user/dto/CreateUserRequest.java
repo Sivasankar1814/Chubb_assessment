@@ -20,7 +20,7 @@ public record CreateUserRequest(
         Boolean active,
         @Schema(description = "CLAIMANT only (required)") @Size(max = 50) String country,
         @Schema(description = "CLAIMANT only (required)") @Size(max = 30) String policyNumber,
-        @Schema(description = "STAFF only (required)") @Size(max = 30) String specialization,
-        @Schema(description = "STAFF only (required): most open claims this person can hold")
+        @Schema(description = "OFFICER only (required)") @Size(max = 30) String specialization,
+        @Schema(description = "OFFICER only (required): most open claims this person can hold")
         @Min(1) @Max(100) Integer maxCapacity) {
 }

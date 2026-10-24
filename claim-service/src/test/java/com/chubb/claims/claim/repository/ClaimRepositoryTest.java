@@ -23,11 +23,11 @@ class ClaimRepositoryTest {
     @Autowired
     private ClaimHistoryRepository history;
 
-    private Claim newClaim(long claimantId, ClaimStatus status, Long staffId) {
+    private Claim newClaim(long claimantId, ClaimStatus status, Long officerId) {
         Claim claim = new Claim(claimantId, ClaimType.MOTOR, "Water damage", new BigDecimal("2500.50"),
                 LocalDate.now().minusDays(1));
-        if (staffId != null) {
-            claim.assignTo(staffId, status);
+        if (officerId != null) {
+            claim.assignTo(officerId, status);
         } else {
             claim.changeStatus(status);
         }
@@ -45,7 +45,7 @@ class ClaimRepositoryTest {
         assertThat(saved.getClaimNumber())
                 .isEqualTo("CLM-%d-%06d".formatted(LocalDate.now().getYear(), saved.getId()));
         assertThat(saved.getClaimAmount()).isEqualByComparingTo("2500.50");
-        assertThat(saved.getAssignedStaffId()).isNull();
+        assertThat(saved.getAssignedOfficerId()).isNull();
     }
 
     @Test
@@ -66,8 +66,8 @@ class ClaimRepositoryTest {
         newClaim(1, ClaimStatus.APPROVED, 7L);
         newClaim(1, ClaimStatus.ASSIGNED, 8L);
 
-        assertThat(claims.countOpenByStaff(7)).isEqualTo(2);
-        assertThat(claims.countOpenGroupedByStaff()).isEqualTo(Map.of(7L, 2L, 8L, 1L));
+        assertThat(claims.countOpenByOfficer(7)).isEqualTo(2);
+        assertThat(claims.countOpenGroupedByOfficer()).isEqualTo(Map.of(7L, 2L, 8L, 1L));
     }
 
     @Test

@@ -12,7 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public record CreateClaimRequest(
-        @Schema(description = "Required when staff/manager files on behalf of a claimant; ignored for claimants")
+        @Schema(description = "Required when officer/manager files on behalf of a claimant; ignored for claimants")
         Long claimantId,
         @NotNull ClaimType claimType,
         @NotBlank @Size(max = 1000) String description,

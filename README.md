@@ -20,15 +20,15 @@ A microservices-based claims platform built with **Java 21**, **Spring Boot 3.3*
 | Module             | Port | Responsibility                                                         | Database          |
 |--------------------|------|------------------------------------------------------------------------|-------------------|
 | `api-gateway`      | 8080 | Single entry point, routing, aggregated Swagger UI                     | –                 |
-| `user-service`     | 8081 | **All users** (claimants, staff, managers): profiles, roles, capacity, active flag, login and JWT issuing | `userdb` / `user_db` |
+| `user-service`     | 8081 | **All users** (claimants, officers, managers): profiles, roles, capacity, active flag, login and JWT issuing | `userdb` / `user_db` |
 | `claim-service`    | 8083 | Claims, assignment, status workflow, history                           | `claimdb` / `claim_db`       |
-| `workload-service` | 8084 | Utilisation per staff member, next-assignee suggestion                 | stateless (computed live) |
+| `workload-service` | 8084 | Utilisation per officer, next-assignee suggestion                      | stateless (computed live) |
 | `common`           | –    | Shared library: security, exception handling, Feign auth, OpenAPI      | –                 |
 
 Each service owns its own database (database-per-service). Cross-service data is fetched through **OpenFeign**
 (`claim-service → user-service`, `workload-service → user-service / claim-service`).
 There is deliberately **one** service for every kind of user: a `users` table holds identity, password hash and role, and
-the role decides which profile fields apply (claimants: country, policy number; staff: specialization, max capacity).
+the role decides which profile fields apply (claimants: country, policy number; officers: specialization, max capacity).
 
 ### Security
 
@@ -41,14 +41,14 @@ the role decides which profile fields apply (claimants: country, policy number; 
 * Configure the signing secret with `CHUBB_SECURITY_JWT_SECRET` (**same value in every service**, at least 32 characters;
   the built-in default is for local demos only) and the lifetime with `chubb.security.jwt.expiration-minutes`.
 * Demo users are created in the `users` table on first start (`chubb.seed-demo-users`, set to `false` in production).
-  The user id is what other services store (a claim's `claimantId`, its `assignedStaffId`):
+  The user id is what other services store (a claim's `claimantId`, its `assignedOfficerId`):
 
 | Username    | Password      | Role       | Linked record                     |
 |-------------|---------------|------------|-----------------------------------|
 | `claimant1` | `claimant123` | CLAIMANT   | user id 1 (Aiko Tanaka)           |
 | `claimant2` | `claimant123` | CLAIMANT   | user id 2 (Wei Lim)               |
-| `staff1`    | `staff123`    | STAFF      | user id 3 (Priya Nair, cap. 5)    |
-| `staff2`    | `staff123`    | STAFF      | user id 4 (Daniel Chen, cap. 8)   |
+| `officer1`  | `officer123`  | OFFICER    | user id 3 (Priya Nair, cap. 5)    |
+| `officer2`  | `officer123`  | OFFICER    | user id 4 (Daniel Chen, cap. 8)   |
 | `manager1`  | `manager123`  | MANAGER    | user id 5 (Maria Santos)          |
 
 > The in-memory user store is deliberately simple for this exercise. For production, replace the lookup in
@@ -57,7 +57,7 @@ the role decides which profile fields apply (claimants: country, policy number; 
 
 ### Access matrix
 
-| Endpoint                                   | CLAIMANT         | STAFF                          | MANAGER |
+| Endpoint                                   | CLAIMANT         | OFFICER                        | MANAGER |
 |--------------------------------------------|------------------|--------------------------------|---------|
 | `POST /api/claims`                         | own claim        | on behalf of claimant          | ✔       |
 | `GET /api/claims`, `/{id}`, `/{id}/history`| own claims only  | all                            | all     |
@@ -68,7 +68,7 @@ the role decides which profile fields apply (claimants: country, policy number; 
 | `GET /api/users?role=&active=`             | ✖                | ✔                              | ✔       |
 | `POST /api/users`                          | ✖                | claimants only                 | any role |
 | `PUT / DELETE /api/users/{id}`             | ✖                | ✖                              | ✔       |
-| `GET /api/workload`, `/{staffId}`          | ✖                | ✔                              | ✔       |
+| `GET /api/workload`, `/{officerId}`       | ✖                | ✔                              | ✔       |
 | `GET /api/workload/suggestion`             | ✖                | ✖                              | ✔       |
 
 ## Business rules
@@ -83,7 +83,7 @@ OPEN ─► ASSIGNED ─► UNDER_REVIEW ─┬─► APPROVED ─► SETTLED �
 
 * Any other transition returns **409 Conflict** listing the allowed next statuses.
 * `ASSIGNED` can only be reached through the assignment endpoint; rejecting a claim requires `remarks`.
-* Assignment verifies the staff member exists and is active, is not already the assignee, and has spare
+* Assignment verifies the officer exists and is active, is not already the assignee, and has spare
   capacity (`open claims < maxCapacity`). Reassigning keeps the current status.
 * **History**: every creation, assignment/reassignment and status change is appended to `claim_history`
   (who, when, from → to, remarks).
@@ -152,21 +152,21 @@ H2 consoles are available at `http://localhost:808{1,3}/h2-console` (JDBC URL `j
 # 0. log in as each user (the response contains "accessToken"; here extracted with sed, or use jq -r .accessToken)
 login() { curl -s -H "Content-Type: application/json" -X POST http://localhost:8080/api/auth/login \
   -d "{\"username\":\"$1\",\"password\":\"$2\"}" | sed -E 's/.*"accessToken":"([^"]+)".*/\1/'; }
-CLAIMANT=$(login claimant1 claimant123); MANAGER=$(login manager1 manager123); STAFF2=$(login staff2 staff123)
+CLAIMANT=$(login claimant1 claimant123); MANAGER=$(login manager1 manager123); OFFICER2=$(login officer2 officer123)
 
 # 1. claimant files a claim (claimant id is taken from the logged-in user)
 curl -H "Authorization: Bearer $CLAIMANT" -H "Content-Type: application/json" -X POST http://localhost:8080/api/claims \
   -d '{"claimType":"MOTOR","description":"Rear-ended at lights","claimAmount":1500.00,"incidentDate":"2026-10-01"}'
 
-# 2. manager asks which staff member has capacity, then assigns the claim
+# 2. manager asks which officer has capacity, then assigns the claim
 curl -H "Authorization: Bearer $MANAGER" http://localhost:8080/api/workload/suggestion
 curl -H "Authorization: Bearer $MANAGER" -H "Content-Type: application/json" -X PUT http://localhost:8080/api/claims/1/assignment \
-  -d '{"staffId":4}'      # 4 = staff2 (Daniel Chen), a user id
+  -d '{"officerId":4}'      # 4 = officer2 (Daniel Chen), a user id
 
-# 3. the assigned staff member works the claim
-curl -H "Authorization: Bearer $STAFF2" -H "Content-Type: application/json" -X PATCH http://localhost:8080/api/claims/1/status \
+# 3. the assigned officer works the claim
+curl -H "Authorization: Bearer $OFFICER2" -H "Content-Type: application/json" -X PATCH http://localhost:8080/api/claims/1/status \
   -d '{"status":"UNDER_REVIEW","remarks":"Reviewing documents"}'
-curl -H "Authorization: Bearer $STAFF2" -H "Content-Type: application/json" -X PATCH http://localhost:8080/api/claims/1/status \
+curl -H "Authorization: Bearer $OFFICER2" -H "Content-Type: application/json" -X PATCH http://localhost:8080/api/claims/1/status \
   -d '{"status":"APPROVED"}'
 
 # 4. audit trail and workload
@@ -181,7 +181,7 @@ Errors share one JSON shape (`timestamp`, `status`, `error`, `message`, `path`, 
 | Bean-validation failure / malformed JSON    | 400 (field errors in `details`) |
 | No, invalid or expired token / bad login    | 401    |
 | Role or ownership violation                 | 403    |
-| Unknown claim / claimant / staff            | 404    |
+| Unknown claim / claimant / officer            | 404    |
 | Illegal status transition, capacity, duplicates | 409 |
 | Downstream service failure                  | 502 (or the downstream 4xx) |
 

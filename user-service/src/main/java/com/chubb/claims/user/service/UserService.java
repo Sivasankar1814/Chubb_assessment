@@ -25,11 +25,11 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    /** Managers create any user; staff may only register claimants. */
+    /** Managers create any user; officers may only register claimants. */
     @Transactional
     public User create(CreateUserRequest request, boolean callerIsManager) {
         if (!callerIsManager && request.role() != Role.CLAIMANT) {
-            throw new AccessDeniedException("Staff can only register claimants; ask a manager to create "
+            throw new AccessDeniedException("Officers can only register claimants; ask a manager to create "
                     + request.role() + " users");
         }
         if (repository.findByUsername(request.username()).isPresent()) {
@@ -86,11 +86,11 @@ public class UserService {
                 }
                 user.setClaimantDetails(country, policyNumber);
             }
-            case STAFF -> {
+            case OFFICER -> {
                 if (!StringUtils.hasText(specialization) || maxCapacity == null) {
-                    throw new IllegalArgumentException("Staff require specialization and maxCapacity");
+                    throw new IllegalArgumentException("Officers require specialization and maxCapacity");
                 }
-                user.setStaffDetails(specialization, maxCapacity);
+                user.setOfficerDetails(specialization, maxCapacity);
             }
             case MANAGER -> {
                 // no role-specific profile

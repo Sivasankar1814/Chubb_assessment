@@ -39,7 +39,7 @@ public class ClaimController {
     }
 
     @PostMapping
-    @Operation(summary = "Submit a claim (claimants file for themselves; staff/managers file on behalf of a claimant)")
+    @Operation(summary = "Submit a claim (claimants file for themselves; officers and managers file on behalf of a claimant)")
     public ResponseEntity<Claim> create(@Valid @RequestBody CreateClaimRequest request, Authentication auth) {
         Claim created = service.create(request, Caller.from(auth));
         return ResponseEntity.created(URI.create("/api/claims/" + created.getId())).body(created);
@@ -49,9 +49,9 @@ public class ClaimController {
     @Operation(summary = "List claims (claimants only see their own)")
     public List<Claim> list(@RequestParam(required = false) ClaimStatus status,
                             @RequestParam(required = false) Long claimantId,
-                            @RequestParam(required = false) Long assignedStaffId,
+                            @RequestParam(required = false) Long assignedOfficerId,
                             Authentication auth) {
-        return service.list(status, claimantId, assignedStaffId, Caller.from(auth));
+        return service.list(status, claimantId, assignedOfficerId, Caller.from(auth));
     }
 
     @GetMapping("/{id}")
@@ -68,23 +68,23 @@ public class ClaimController {
 
     @PutMapping("/{id}/assignment")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Assign or reassign a claim to a staff member (manager)")
+    @Operation(summary = "Assign or reassign a claim to an officer (manager)")
     public Claim assign(@PathVariable long id, @Valid @RequestBody AssignClaimRequest request, Authentication auth) {
         return service.assign(id, request, Caller.from(auth));
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('STAFF','MANAGER')")
-    @Operation(summary = "Move a claim to its next status (assigned staff or manager)")
+    @PreAuthorize("hasAnyRole('OFFICER','MANAGER')")
+    @Operation(summary = "Move a claim to its next status (assigned officer or manager)")
     public Claim updateStatus(@PathVariable long id, @Valid @RequestBody UpdateStatusRequest request,
                               Authentication auth) {
         return service.updateStatus(id, request, Caller.from(auth));
     }
 
-    @GetMapping("/stats/open-by-staff")
-    @PreAuthorize("hasAnyRole('STAFF','MANAGER')")
-    @Operation(summary = "Open claim count per staff id (used by the workload service)")
-    public Map<Long, Long> openByStaff() {
-        return service.openClaimCountsByStaff();
+    @GetMapping("/stats/open-by-officer")
+    @PreAuthorize("hasAnyRole('OFFICER','MANAGER')")
+    @Operation(summary = "Open claim count per officer id (used by the workload service)")
+    public Map<Long, Long> openByOfficer() {
+        return service.openClaimCountsByOfficer();
     }
 }

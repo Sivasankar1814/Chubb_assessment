@@ -31,8 +31,8 @@ public class DemoDataSeeder implements ApplicationRunner {
                 "POL-JP-0001"));
         users.save(claimant("claimant2", "Wei Lim", "wei.lim@example.com", "+65-9123-4567", "Singapore",
                 "POL-SG-0002"));
-        users.save(staff("staff1", "Priya Nair", "priya.nair@chubb.example.com", "HEALTH", 5));
-        users.save(staff("staff2", "Daniel Chen", "daniel.chen@chubb.example.com", "MOTOR", 8));
+        users.save(officer("officer1", "Priya Nair", "priya.nair@chubb.example.com", "HEALTH", 5));
+        users.save(officer("officer2", "Daniel Chen", "daniel.chen@chubb.example.com", "MOTOR", 8));
         users.save(new User("manager1", passwordEncoder.encode("manager123"), Role.MANAGER, "Maria Santos",
                 "maria.santos@chubb.example.com", null, true));
     }
@@ -45,9 +45,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         return user;
     }
 
-    private User staff(String username, String fullName, String email, String specialization, int maxCapacity) {
-        User user = new User(username, passwordEncoder.encode("staff123"), Role.STAFF, fullName, email, null, true);
-        user.setStaffDetails(specialization, maxCapacity);
+    private User officer(String username, String fullName, String email, String specialization, int maxCapacity) {
+        User user = new User(username, passwordEncoder.encode("officer123"), Role.OFFICER, fullName, email, null, true);
+        user.setOfficerDetails(specialization, maxCapacity);
         return user;
     }
 }

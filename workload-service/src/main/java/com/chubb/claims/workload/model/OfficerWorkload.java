@@ -2,7 +2,7 @@ package com.chubb.claims.workload.model;
 
 import java.math.BigDecimal;
 
-public record StaffWorkload(Long staffId, String fullName, String specialization, int maxCapacity, long openClaims,
+public record OfficerWorkload(Long officerId, String fullName, String specialization, int maxCapacity, long openClaims,
                             long availableCapacity, BigDecimal utilizationPercent, Level level) {
 
     public enum Level {

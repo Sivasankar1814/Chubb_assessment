@@ -56,7 +56,7 @@ public class SecurityConfig {
         return decoder;
     }
 
-    /** The token carries a "roles" claim (e.g. ["STAFF"]); expose each as ROLE_x for hasRole(..) checks. */
+    /** The token carries a "roles" claim (e.g. ["OFFICER"]); expose each as ROLE_x for hasRole(..) checks. */
     private static JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
         authorities.setAuthoritiesClaimName("roles");

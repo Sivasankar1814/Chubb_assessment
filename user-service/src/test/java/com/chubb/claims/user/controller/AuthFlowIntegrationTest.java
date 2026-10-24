@@ -46,17 +46,17 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(org.hamcrest.Matchers.greaterThanOrEqualTo(5)))
                 .andExpect(jsonPath("$[0].username").value("claimant1"))
-                .andExpect(jsonPath("$[2].role").value("STAFF"));
+                .andExpect(jsonPath("$[2].role").value("OFFICER"));
     }
 
     @Test
     void tokenResolvesToTheRightProfile() throws Exception {
-        String token = login("staff1", "staff123");
+        String token = login("officer1", "officer123");
 
         mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.username").value("staff1"))
-                .andExpect(jsonPath("$.role").value("STAFF"))
+                .andExpect(jsonPath("$.username").value("officer1"))
+                .andExpect(jsonPath("$.role").value("OFFICER"))
                 .andExpect(jsonPath("$.maxCapacity").value(5));
     }
 
@@ -67,11 +67,11 @@ class AuthFlowIntegrationTest {
         mvc.perform(post("/api/users").header("Authorization", "Bearer " + manager)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"username":"staff9","password":"newpass1","role":"STAFF","fullName":"Sam Ortiz",
+                                {"username":"officer9","password":"newpass1","role":"OFFICER","fullName":"Sam Ortiz",
                                  "email":"sam@chubb.example.com","specialization":"TRAVEL","maxCapacity":4}"""))
                 .andExpect(status().isCreated());
 
-        login("staff9", "newpass1");
+        login("officer9", "newpass1");
     }
 
     @Test
@@ -106,7 +106,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void tamperedTokenIsRejected() throws Exception {
-        String token = login("staff1", "staff123");
+        String token = login("officer1", "officer123");
 
         mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token + "x"))
                 .andExpect(status().isUnauthorized())

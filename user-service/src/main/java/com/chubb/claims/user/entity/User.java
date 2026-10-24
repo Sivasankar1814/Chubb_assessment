@@ -12,8 +12,8 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 /**
- * Every person in the system: claimants, claims staff and managers. Identity and login live here; the role decides
- * which of the profile columns apply (claimants: country/policyNumber, staff: specialization/maxCapacity).
+ * Every person in the system: claimants, claims officers and managers. Identity and login live here; the role decides
+ * which of the profile columns apply (claimants: country/policyNumber, officers: specialization/maxCapacity).
  */
 @Entity
 @Table(name = "users")
@@ -85,7 +85,7 @@ public class User {
         this.policyNumber = policyNumber;
     }
 
-    public void setStaffDetails(String specialization, Integer maxCapacity) {
+    public void setOfficerDetails(String specialization, Integer maxCapacity) {
         this.specialization = specialization;
         this.maxCapacity = maxCapacity;
     }

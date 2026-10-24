@@ -16,27 +16,27 @@ public interface ClaimRepository extends JpaRepository<Claim, Long> {
             select c from Claim c
             where (:status is null or c.status = :status)
               and (:claimantId is null or c.claimantId = :claimantId)
-              and (:assignedStaffId is null or c.assignedStaffId = :assignedStaffId)
+              and (:assignedOfficerId is null or c.assignedOfficerId = :assignedOfficerId)
             order by c.id desc""")
     List<Claim> search(@Param("status") ClaimStatus status, @Param("claimantId") Long claimantId,
-                       @Param("assignedStaffId") Long assignedStaffId);
+                       @Param("assignedOfficerId") Long assignedOfficerId);
 
-    long countByAssignedStaffIdAndStatusIn(Long staffId, Collection<ClaimStatus> statuses);
+    long countByAssignedOfficerIdAndStatusIn(Long officerId, Collection<ClaimStatus> statuses);
 
     @Query("""
-            select c.assignedStaffId, count(c) from Claim c
-            where c.assignedStaffId is not null and c.status in :statuses
-            group by c.assignedStaffId""")
-    List<Object[]> countGroupedByStaff(@Param("statuses") Collection<ClaimStatus> statuses);
+            select c.assignedOfficerId, count(c) from Claim c
+            where c.assignedOfficerId is not null and c.status in :statuses
+            group by c.assignedOfficerId""")
+    List<Object[]> countGroupedByOfficer(@Param("statuses") Collection<ClaimStatus> statuses);
 
-    default long countOpenByStaff(long staffId) {
-        return countByAssignedStaffIdAndStatusIn(staffId, ClaimStatus.IN_PROGRESS);
+    default long countOpenByOfficer(long officerId) {
+        return countByAssignedOfficerIdAndStatusIn(officerId, ClaimStatus.IN_PROGRESS);
     }
 
-    /** staffId -> number of claims currently being worked on. */
-    default Map<Long, Long> countOpenGroupedByStaff() {
+    /** officerId -> number of claims currently being worked on. */
+    default Map<Long, Long> countOpenGroupedByOfficer() {
         Map<Long, Long> result = new LinkedHashMap<>();
-        for (Object[] row : countGroupedByStaff(ClaimStatus.IN_PROGRESS)) {
+        for (Object[] row : countGroupedByOfficer(ClaimStatus.IN_PROGRESS)) {
             result.put((Long) row[0], (Long) row[1]);
         }
         return result;

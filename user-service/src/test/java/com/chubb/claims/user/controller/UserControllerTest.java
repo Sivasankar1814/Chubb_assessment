@@ -60,13 +60,13 @@ class UserControllerTest {
     }
 
     @Test
-    void staffCanListAndFilterUsers() throws Exception {
-        when(service.search(Role.STAFF, true)).thenReturn(List.of(user(3, "staff1", Role.STAFF)));
+    void officerCanListAndFilterUsers() throws Exception {
+        when(service.search(Role.OFFICER, true)).thenReturn(List.of(user(3, "officer1", Role.OFFICER)));
 
-        mvc.perform(get("/api/users?role=STAFF&active=true").with(as("manager1", "MANAGER")))
+        mvc.perform(get("/api/users?role=OFFICER&active=true").with(as("manager1", "MANAGER")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].username").value("staff1"))
-                .andExpect(jsonPath("$[0].role").value("STAFF"));
+                .andExpect(jsonPath("$[0].username").value("officer1"))
+                .andExpect(jsonPath("$[0].role").value("OFFICER"));
     }
 
     @Test
@@ -80,10 +80,10 @@ class UserControllerTest {
     }
 
     @Test
-    void staffCanCreateClaimant() throws Exception {
+    void officerCanCreateClaimant() throws Exception {
         when(service.create(any(), eq(false))).thenReturn(user(1, "jdoe", Role.CLAIMANT));
 
-        mvc.perform(post("/api/users").with(as("staff1", "STAFF"))
+        mvc.perform(post("/api/users").with(as("officer1", "OFFICER"))
                         .contentType(MediaType.APPLICATION_JSON).content(CLAIMANT_BODY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1));
@@ -135,7 +135,7 @@ class UserControllerTest {
     void missingUserMapsTo404() throws Exception {
         when(service.getById(9)).thenThrow(new ResourceNotFoundException("User", 9));
 
-        mvc.perform(get("/api/users/9").with(as("staff1", "STAFF")))
+        mvc.perform(get("/api/users/9").with(as("officer1", "OFFICER")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("User not found with id 9"));
     }

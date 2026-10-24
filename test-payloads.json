@@ -3,21 +3,21 @@
     "Sample request bodies for testing through the gateway (http://localhost:8080) or Swagger UI (http://localhost:8080/swagger-ui.html).",
     "Each entry lists the HTTP call, who may make it (login first with the 'login' payloads) and the JSON body.",
     "Send the returned accessToken as 'Authorization: Bearer <token>'.",
-    "Demo user ids (reset on every restart): claimant1=1, claimant2=2, staff1=3, staff2=4, manager1=5.",
+    "Demo user ids (reset on every restart): claimant1=1, claimant2=2, officer1=3, officer2=4, manager1=5.",
     "Suggested order: login -> createClaim -> pickUp/assign -> status moves -> history -> workload."
   ],
 
   "login": {
     "claimant1": { "call": "POST /api/auth/login", "body": { "username": "claimant1", "password": "claimant123" } },
     "claimant2": { "call": "POST /api/auth/login", "body": { "username": "claimant2", "password": "claimant123" } },
-    "staff1": { "call": "POST /api/auth/login", "body": { "username": "staff1", "password": "staff123" } },
-    "staff2": { "call": "POST /api/auth/login", "body": { "username": "staff2", "password": "staff123" } },
+    "officer1": { "call": "POST /api/auth/login", "body": { "username": "officer1", "password": "officer123" } },
+    "officer2": { "call": "POST /api/auth/login", "body": { "username": "officer2", "password": "officer123" } },
     "manager1": { "call": "POST /api/auth/login", "body": { "username": "manager1", "password": "manager123" } }
   },
 
   "users": {
     "createClaimant": {
-      "call": "POST /api/users  (STAFF or MANAGER)",
+      "call": "POST /api/users  (OFFICER or MANAGER)",
       "body": {
         "username": "claimant3",
         "password": "claimant123",
@@ -29,19 +29,19 @@
         "policyNumber": "POL-SG-1003"
       }
     },
-    "createStaff": {
+    "createOfficer": {
       "call": "POST /api/users  (MANAGER only)",
       "body": {
-        "username": "staff3",
-        "password": "staff123",
-        "role": "STAFF",
+        "username": "officer3",
+        "password": "officer123",
+        "role": "OFFICER",
         "fullName": "Ravi Kumar",
         "email": "ravi.kumar@chubb.example.com",
         "specialization": "PROPERTY",
         "maxCapacity": 6
       }
     },
-    "updateStaff": {
+    "updateOfficer": {
       "call": "PUT /api/users/4  (MANAGER only)",
       "body": {
         "fullName": "Daniel Chen",
@@ -73,7 +73,7 @@
       }
     },
     "createTravelOnBehalf": {
-      "call": "POST /api/claims  (STAFF or MANAGER files for a claimant; claimantId is required)",
+      "call": "POST /api/claims  (OFFICER or MANAGER files for a claimant; claimantId is required)",
       "body": {
         "claimantId": 2,
         "claimType": "TRAVEL",
@@ -103,18 +103,18 @@
   },
 
   "assignment": {
-    "assignToStaff1": {
-      "call": "PUT /api/claims/{id}/assignment  (MANAGER only; staffId must be a STAFF user id: 3 or 4)",
-      "body": { "staffId": 3, "remarks": "Health specialist" }
+    "assignToOfficer1": {
+      "call": "PUT /api/claims/{id}/assignment  (MANAGER only; officerId must be an OFFICER user id: 3 or 4)",
+      "body": { "officerId": 3, "remarks": "Health specialist" }
     },
-    "assignToStaff2": {
+    "assignToOfficer2": {
       "call": "PUT /api/claims/{id}/assignment  (MANAGER only)",
-      "body": { "staffId": 4, "remarks": "Motor specialist" }
+      "body": { "officerId": 4, "remarks": "Motor specialist" }
     }
   },
 
   "status": {
-    "_note": "PATCH /api/claims/{id}/status (STAFF on own or unassigned OPEN claims, MANAGER on any). A staff update on an unassigned OPEN claim picks it up automatically. Flow: OPEN -> ASSIGNED -> UNDER_REVIEW -> APPROVED|REJECTED; APPROVED -> SETTLED -> CLOSED; REJECTED -> CLOSED.",
+    "_note": "PATCH /api/claims/{id}/status (OFFICER on own or unassigned OPEN claims, MANAGER on any). An officer update on an unassigned OPEN claim picks it up automatically. Flow: OPEN -> ASSIGNED -> UNDER_REVIEW -> APPROVED|REJECTED; APPROVED -> SETTLED -> CLOSED; REJECTED -> CLOSED.",
     "startReview": { "status": "UNDER_REVIEW", "remarks": "Documents received, starting review" },
     "approve": { "status": "APPROVED", "remarks": "Claim verified against policy" },
     "reject": { "status": "REJECTED", "remarks": "Incident not covered under policy section 4.2" },
@@ -127,12 +127,12 @@
     "history": "GET /api/claims/1/history",
     "listAll": "GET /api/claims",
     "listOpen": "GET /api/claims?status=OPEN",
-    "listForStaff": "GET /api/claims?assignedStaffId=3",
-    "listForClaimant": "GET /api/claims?claimantId=1  (STAFF or MANAGER)",
-    "workloadAllStaff": "GET /api/workload  (STAFF or MANAGER)",
-    "workloadOneStaff": "GET /api/workload/3",
+    "listForOfficer": "GET /api/claims?assignedOfficerId=3",
+    "listForClaimant": "GET /api/claims?claimantId=1  (OFFICER or MANAGER)",
+    "workloadAllOfficers": "GET /api/workload  (OFFICER or MANAGER)",
+    "workloadOneOfficer": "GET /api/workload/3",
     "workloadSuggestion": "GET /api/workload/suggestion",
-    "users": "GET /api/users?role=STAFF&active=true",
+    "users": "GET /api/users?role=OFFICER&active=true",
     "me": "GET /api/users/me"
   },
 
@@ -155,12 +155,12 @@
       "body": { "claimType": "PET", "description": "Unknown type", "claimAmount": 100, "incidentDate": "2026-10-10" }
     },
     "assignToClaimant": {
-      "call": "PUT /api/claims/{id}/assignment  -> 409 User ... is not a staff member",
-      "body": { "staffId": 1 }
+      "call": "PUT /api/claims/{id}/assignment  -> 409 User ... is not an officer",
+      "body": { "officerId": 1 }
     },
     "assignToUnknownUser": {
       "call": "PUT /api/claims/{id}/assignment  -> 404",
-      "body": { "staffId": 999 }
+      "body": { "officerId": 999 }
     },
     "rejectWithoutRemarks": {
       "call": "PATCH /api/claims/{id}/status on an UNDER_REVIEW claim  -> 409 Remarks are mandatory",
@@ -179,7 +179,7 @@
       "body": { "username": "claimant1", "password": "wrong" }
     },
     "claimantCannotAssign": "PUT /api/claims/{id}/assignment as claimant1  -> 403",
-    "staffNotAssigned": "PATCH /api/claims/{id}/status as staff2 on a claim assigned to staff1  -> 403 Claim is not assigned to you",
+    "officerNotAssigned": "PATCH /api/claims/{id}/status as officer2 on a claim assigned to officer1  -> 403 Claim is not assigned to you",
     "noToken": "GET /api/claims without Authorization header  -> 401"
   }
 }

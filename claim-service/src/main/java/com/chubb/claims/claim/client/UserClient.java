@@ -13,7 +13,7 @@ public interface UserClient {
     @GetMapping("/api/users/by-username/{username}")
     UserSummary getByUsername(@PathVariable("username") String username);
 
-    /** The fields claim-service needs; maxCapacity is only present for staff. */
+    /** The fields claim-service needs; maxCapacity is only present for officers. */
     record UserSummary(Long id, String fullName, String role, boolean active, int maxCapacity) {
     }
 }

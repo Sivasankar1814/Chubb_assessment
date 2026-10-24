@@ -25,7 +25,7 @@ import org.springframework.util.StringUtils;
 @Service
 public class ClaimService {
 
-    private static final String STAFF_ROLE = "STAFF";
+    private static final String OFFICER_ROLE = "OFFICER";
     private static final String CLAIMANT_ROLE = "CLAIMANT";
 
     private final ClaimRepository claims;
@@ -54,11 +54,11 @@ public class ClaimService {
         return claim;
     }
 
-    public List<Claim> list(ClaimStatus status, Long claimantId, Long assignedStaffId, Caller caller) {
+    public List<Claim> list(ClaimStatus status, Long claimantId, Long assignedOfficerId, Caller caller) {
         if (caller.isClaimant()) {
-            return claims.search(status, ownClaimantId(caller), assignedStaffId);
+            return claims.search(status, ownClaimantId(caller), assignedOfficerId);
         }
-        return claims.search(status, claimantId, assignedStaffId);
+        return claims.search(status, claimantId, assignedOfficerId);
     }
 
     public List<ClaimHistory> getHistory(long id, Caller caller) {
@@ -74,27 +74,27 @@ public class ClaimService {
             throw new BusinessRuleException("Claims in status " + current + " cannot be (re)assigned");
         }
 
-        UserSummary staff = userClient.getById(request.staffId());
-        if (!STAFF_ROLE.equals(staff.role())) {
-            throw new BusinessRuleException("User " + staff.fullName() + " is not a staff member");
+        UserSummary officer = userClient.getById(request.officerId());
+        if (!OFFICER_ROLE.equals(officer.role())) {
+            throw new BusinessRuleException("User " + officer.fullName() + " is not an officer");
         }
-        if (!staff.active()) {
-            throw new BusinessRuleException("Staff member " + staff.fullName() + " is not active");
+        if (!officer.active()) {
+            throw new BusinessRuleException("Officer " + officer.fullName() + " is not active");
         }
-        if (Objects.equals(claim.getAssignedStaffId(), staff.id())) {
-            throw new BusinessRuleException("Claim is already assigned to " + staff.fullName());
+        if (Objects.equals(claim.getAssignedOfficerId(), officer.id())) {
+            throw new BusinessRuleException("Claim is already assigned to " + officer.fullName());
         }
-        long openClaims = claims.countOpenByStaff(staff.id());
-        if (openClaims >= staff.maxCapacity()) {
-            throw new BusinessRuleException("Staff member %s is at full capacity (%d/%d open claims)"
-                    .formatted(staff.fullName(), openClaims, staff.maxCapacity()));
+        long openClaims = claims.countOpenByOfficer(officer.id());
+        if (openClaims >= officer.maxCapacity()) {
+            throw new BusinessRuleException("Officer %s is at full capacity (%d/%d open claims)"
+                    .formatted(officer.fullName(), openClaims, officer.maxCapacity()));
         }
 
-        boolean reassignment = claim.getAssignedStaffId() != null;
+        boolean reassignment = claim.getAssignedOfficerId() != null;
         ClaimStatus newStatus = current == ClaimStatus.OPEN ? ClaimStatus.ASSIGNED : current;
-        claim.assignTo(staff.id(), newStatus);
+        claim.assignTo(officer.id(), newStatus);
         String remarks = StringUtils.hasText(request.remarks()) ? request.remarks()
-                : "Assigned to " + staff.fullName() + " (staff id " + staff.id() + ")";
+                : "Assigned to " + officer.fullName() + " (officer id " + officer.id() + ")";
         record(claim, reassignment ? Action.REASSIGNED : Action.ASSIGNED, current, newStatus, caller, remarks);
         return claims.save(claim);
     }
@@ -103,13 +103,13 @@ public class ClaimService {
     public Claim updateStatus(long id, UpdateStatusRequest request, Caller caller) {
         Claim claim = find(id);
         if (!caller.isManager()) {
-            claimForStaff(claim, caller);
+            claimForOfficer(claim, caller);
         }
 
         ClaimStatus current = claim.getStatus();
         ClaimStatus target = request.status();
         if (target == ClaimStatus.ASSIGNED) {
-            throw new BusinessRuleException("Use the assignment endpoint to assign a claim to a staff member");
+            throw new BusinessRuleException("Use the assignment endpoint to assign a claim to an officer");
         }
         if (!current.canTransitionTo(target)) {
             throw new BusinessRuleException("Cannot move claim from %s to %s. Allowed next statuses: %s"
@@ -124,9 +124,9 @@ public class ClaimService {
         return claims.save(claim);
     }
 
-    /** staffId -> open (assigned / under review) claim count; consumed by the workload service. */
-    public Map<Long, Long> openClaimCountsByStaff() {
-        return claims.countOpenGroupedByStaff();
+    /** officerId -> open (assigned / under review) claim count; consumed by the workload service. */
+    public Map<Long, Long> openClaimCountsByOfficer() {
+        return claims.countOpenGroupedByOfficer();
     }
 
     private Claim find(long id) {
@@ -158,12 +158,12 @@ public class ClaimService {
     }
 
     /**
-     * Staff may work a claim assigned to them, or pick up one nobody has been assigned to yet (the claim is then
+     * Officers may work a claim assigned to them, or pick up one nobody has been assigned to yet (the claim is then
      * assigned to them, subject to capacity). A claim assigned to someone else is off limits.
      */
-    private void claimForStaff(Claim claim, Caller caller) {
+    private void claimForOfficer(Claim claim, Caller caller) {
         UserSummary me = userClient.getByUsername(caller.username());
-        Long assignee = claim.getAssignedStaffId();
+        Long assignee = claim.getAssignedOfficerId();
         if (assignee != null) {
             if (!Objects.equals(assignee, me.id())) {
                 throw new AccessDeniedException("Claim is not assigned to you");
@@ -173,14 +173,14 @@ public class ClaimService {
         if (claim.getStatus() != ClaimStatus.OPEN) {
             return;
         }
-        long openClaims = claims.countOpenByStaff(me.id());
+        long openClaims = claims.countOpenByOfficer(me.id());
         if (openClaims >= me.maxCapacity()) {
-            throw new BusinessRuleException("Staff member %s is at full capacity (%d/%d open claims)"
+            throw new BusinessRuleException("Officer %s is at full capacity (%d/%d open claims)"
                     .formatted(me.fullName(), openClaims, me.maxCapacity()));
         }
         claim.assignTo(me.id(), ClaimStatus.ASSIGNED);
         record(claim, Action.ASSIGNED, ClaimStatus.OPEN, ClaimStatus.ASSIGNED, caller,
-                "Picked up by " + me.fullName() + " (staff id " + me.id() + ")");
+                "Picked up by " + me.fullName() + " (officer id " + me.id() + ")");
     }
 
     private void record(Claim claim, Action action, ClaimStatus from, ClaimStatus to, Caller caller,

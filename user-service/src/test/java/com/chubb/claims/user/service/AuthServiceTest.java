@@ -37,31 +37,31 @@ class AuthServiceTest {
         return new AuthService(users, encoder, new TokenService(jwtProperties));
     }
 
-    private User staff1(boolean active) {
-        User user = new User("staff1", encoder.encode("staff123"), Role.STAFF, "Priya Nair", "p@example.com", null, active);
+    private User officer1(boolean active) {
+        User user = new User("officer1", encoder.encode("officer123"), Role.OFFICER, "Priya Nair", "p@example.com", null, active);
         return user;
     }
 
     @Test
     void validLoginReturnsSignedTokenCarryingUsernameAndRole() {
-        when(users.findByUsername("staff1")).thenReturn(Optional.of(staff1(true)));
+        when(users.findByUsername("officer1")).thenReturn(Optional.of(officer1(true)));
 
-        TokenResponse response = service().login(new LoginRequest("staff1", "staff123"));
+        TokenResponse response = service().login(new LoginRequest("officer1", "officer123"));
 
         assertThat(response.tokenType()).isEqualTo("Bearer");
         assertThat(response.expiresInSeconds()).isEqualTo(jwtProperties.getExpirationMinutes() * 60);
-        assertThat(response.roles()).containsExactly("STAFF");
+        assertThat(response.roles()).containsExactly("OFFICER");
         Jwt decoded = decoder.decode(response.accessToken());
-        assertThat(decoded.getSubject()).isEqualTo("staff1");
-        assertThat(decoded.getClaimAsStringList("roles")).containsExactly("STAFF");
+        assertThat(decoded.getSubject()).isEqualTo("officer1");
+        assertThat(decoded.getClaimAsStringList("roles")).containsExactly("OFFICER");
         assertThat(decoded.getClaimAsString("iss")).isEqualTo(jwtProperties.getIssuer());
     }
 
     @Test
     void wrongPasswordIsRejected() {
-        when(users.findByUsername("staff1")).thenReturn(Optional.of(staff1(true)));
+        when(users.findByUsername("officer1")).thenReturn(Optional.of(officer1(true)));
 
-        assertThatThrownBy(() -> service().login(new LoginRequest("staff1", "nope")))
+        assertThatThrownBy(() -> service().login(new LoginRequest("officer1", "nope")))
                 .isInstanceOf(BadCredentialsException.class).hasMessage("Invalid username or password");
     }
 
@@ -75,9 +75,9 @@ class AuthServiceTest {
 
     @Test
     void disabledAccountCannotLogIn() {
-        when(users.findByUsername("staff1")).thenReturn(Optional.of(staff1(false)));
+        when(users.findByUsername("officer1")).thenReturn(Optional.of(officer1(false)));
 
-        assertThatThrownBy(() -> service().login(new LoginRequest("staff1", "staff123")))
+        assertThatThrownBy(() -> service().login(new LoginRequest("officer1", "officer123")))
                 .isInstanceOf(BadCredentialsException.class).hasMessage("Invalid username or password");
     }
 }

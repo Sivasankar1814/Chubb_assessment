@@ -1,6 +1,6 @@
 package com.chubb.claims.workload.controller;
 
-import com.chubb.claims.workload.model.StaffWorkload;
+import com.chubb.claims.workload.model.OfficerWorkload;
 import com.chubb.claims.workload.service.WorkloadService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/workload")
-@Tag(name = "Workload", description = "Staff workload calculation")
+@Tag(name = "Workload", description = "Officer workload calculation")
 public class WorkloadController {
 
     private final WorkloadService service;
@@ -23,23 +23,23 @@ public class WorkloadController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('STAFF','MANAGER')")
-    @Operation(summary = "Workload of all active staff, least utilised first")
-    public List<StaffWorkload> all() {
+    @PreAuthorize("hasAnyRole('OFFICER','MANAGER')")
+    @Operation(summary = "Workload of all active officers, least utilised first")
+    public List<OfficerWorkload> all() {
         return service.getAll();
     }
 
     @GetMapping("/suggestion")
     @PreAuthorize("hasRole('MANAGER')")
-    @Operation(summary = "Suggest the best staff member for the next claim (manager)")
-    public StaffWorkload suggestion() {
+    @Operation(summary = "Suggest the best officer for the next claim (manager)")
+    public OfficerWorkload suggestion() {
         return service.suggestAssignee();
     }
 
-    @GetMapping("/{staffId}")
-    @PreAuthorize("hasAnyRole('STAFF','MANAGER')")
-    @Operation(summary = "Workload of a single staff member")
-    public StaffWorkload forStaff(@PathVariable long staffId) {
-        return service.getForStaff(staffId);
+    @GetMapping("/{officerId}")
+    @PreAuthorize("hasAnyRole('OFFICER','MANAGER')")
+    @Operation(summary = "Workload of a single officer")
+    public OfficerWorkload forOfficer(@PathVariable long officerId) {
+        return service.getForOfficer(officerId);
     }
 }

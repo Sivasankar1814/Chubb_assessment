@@ -39,7 +39,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ClaimServiceTest {
 
     private static final Caller CLAIMANT = new Caller("claimant1", Set.of("CLAIMANT"));
-    private static final Caller STAFF = new Caller("staff1", Set.of("STAFF"));
+    private static final Caller OFFICER = new Caller("officer1", Set.of("OFFICER"));
     private static final Caller MANAGER = new Caller("manager1", Set.of("MANAGER"));
 
     @Mock
@@ -51,20 +51,20 @@ class ClaimServiceTest {
     @InjectMocks
     private ClaimService service;
 
-    private Claim claim(long id, ClaimStatus status, Long staffId) {
+    private Claim claim(long id, ClaimStatus status, Long officerId) {
         Claim claim = new Claim(10L, ClaimType.MOTOR, "Rear-ended", new BigDecimal("1500.00"),
                 LocalDate.now().minusDays(2));
         ReflectionTestUtils.setField(claim, "id", id);
-        if (staffId != null) {
-            claim.assignTo(staffId, status);
+        if (officerId != null) {
+            claim.assignTo(officerId, status);
         } else {
             claim.changeStatus(status);
         }
         return claim;
     }
 
-    private UserSummary staff(long id, int capacity, boolean active) {
-        return new UserSummary(id, "Staff " + id, "STAFF", active, capacity);
+    private UserSummary officer(long id, int capacity, boolean active) {
+        return new UserSummary(id, "Officer " + id, "OFFICER", active, capacity);
     }
 
     // ---------------------------------------------------------------- create
@@ -91,22 +91,22 @@ class ClaimServiceTest {
     }
 
     @Test
-    void staffCannotFileOnBehalfOfANonClaimant() {
+    void officerCannotFileOnBehalfOfANonClaimant() {
         CreateClaimRequest request = new CreateClaimRequest(3L, ClaimType.HEALTH, "Surgery", new BigDecimal("900"),
                 LocalDate.now());
-        when(userClient.getById(3L)).thenReturn(staff(3, 5, true));
+        when(userClient.getById(3L)).thenReturn(officer(3, 5, true));
 
-        assertThatThrownBy(() -> service.create(request, STAFF)).isInstanceOf(BusinessRuleException.class)
+        assertThatThrownBy(() -> service.create(request, OFFICER)).isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("not a claimant");
         verify(claims, never()).save(any(Claim.class));
     }
 
     @Test
-    void staffMustSupplyClaimantId() {
+    void officerMustSupplyClaimantId() {
         CreateClaimRequest request = new CreateClaimRequest(null, ClaimType.HEALTH, "Surgery",
                 new BigDecimal("900"), LocalDate.now());
 
-        assertThatThrownBy(() -> service.create(request, STAFF)).isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> service.create(request, OFFICER)).isInstanceOf(BusinessRuleException.class);
         verify(claims, never()).save(any(Claim.class));
     }
 
@@ -133,13 +133,13 @@ class ClaimServiceTest {
     void assigningSubmittedClaimMovesItToAssignedAndLogsHistory() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.OPEN, null)));
         when(claims.save(any(Claim.class))).thenAnswer(call -> call.getArgument(0));
-        when(userClient.getById(2L)).thenReturn(staff(2, 5, true));
-        when(claims.countOpenByStaff(2)).thenReturn(1L);
+        when(userClient.getById(2L)).thenReturn(officer(2, 5, true));
+        when(claims.countOpenByOfficer(2)).thenReturn(1L);
 
         Claim result = service.assign(1, new AssignClaimRequest(2L, null), MANAGER);
 
         assertThat(result.getStatus()).isEqualTo(ClaimStatus.ASSIGNED);
-        assertThat(result.getAssignedStaffId()).isEqualTo(2L);
+        assertThat(result.getAssignedOfficerId()).isEqualTo(2L);
         ArgumentCaptor<ClaimHistory> entry = ArgumentCaptor.forClass(ClaimHistory.class);
         verify(history).save(entry.capture());
         assertThat(entry.getValue().getAction()).isEqualTo(Action.ASSIGNED);
@@ -150,13 +150,13 @@ class ClaimServiceTest {
     void reassigningKeepsStatusAndLogsReassignment() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.UNDER_REVIEW, 3L)));
         when(claims.save(any(Claim.class))).thenAnswer(call -> call.getArgument(0));
-        when(userClient.getById(2L)).thenReturn(staff(2, 5, true));
-        when(claims.countOpenByStaff(2)).thenReturn(0L);
+        when(userClient.getById(2L)).thenReturn(officer(2, 5, true));
+        when(claims.countOpenByOfficer(2)).thenReturn(0L);
 
         Claim result = service.assign(1, new AssignClaimRequest(2L, "Specialist needed"), MANAGER);
 
         assertThat(result.getStatus()).isEqualTo(ClaimStatus.UNDER_REVIEW);
-        assertThat(result.getAssignedStaffId()).isEqualTo(2L);
+        assertThat(result.getAssignedOfficerId()).isEqualTo(2L);
         ArgumentCaptor<ClaimHistory> entry = ArgumentCaptor.forClass(ClaimHistory.class);
         verify(history).save(entry.capture());
         assertThat(entry.getValue().getAction()).isEqualTo(Action.REASSIGNED);
@@ -164,10 +164,10 @@ class ClaimServiceTest {
     }
 
     @Test
-    void assignmentRejectedWhenStaffAtCapacity() {
+    void assignmentRejectedWhenOfficerAtCapacity() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.OPEN, null)));
-        when(userClient.getById(2L)).thenReturn(staff(2, 3, true));
-        when(claims.countOpenByStaff(2)).thenReturn(3L);
+        when(userClient.getById(2L)).thenReturn(officer(2, 3, true));
+        when(claims.countOpenByOfficer(2)).thenReturn(3L);
 
         assertThatThrownBy(() -> service.assign(1, new AssignClaimRequest(2L, null), MANAGER))
                 .isInstanceOf(BusinessRuleException.class).hasMessageContaining("full capacity");
@@ -175,18 +175,18 @@ class ClaimServiceTest {
     }
 
     @Test
-    void assignmentRejectedWhenTargetIsNotStaff() {
+    void assignmentRejectedWhenTargetIsNotOfficer() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.OPEN, null)));
         when(userClient.getById(1L)).thenReturn(new UserSummary(1L, "Aiko", "CLAIMANT", true, 0));
 
         assertThatThrownBy(() -> service.assign(1, new AssignClaimRequest(1L, null), MANAGER))
-                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not a staff member");
+                .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not an officer");
     }
 
     @Test
-    void assignmentRejectedForInactiveStaff() {
+    void assignmentRejectedForInactiveOfficer() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.OPEN, null)));
-        when(userClient.getById(2L)).thenReturn(staff(2, 3, false));
+        when(userClient.getById(2L)).thenReturn(officer(2, 3, false));
 
         assertThatThrownBy(() -> service.assign(1, new AssignClaimRequest(2L, null), MANAGER))
                 .isInstanceOf(BusinessRuleException.class).hasMessageContaining("not active");
@@ -203,48 +203,48 @@ class ClaimServiceTest {
     // ---------------------------------------------------------------- status
 
     @Test
-    void assignedStaffCanMoveClaimToUnderReview() {
+    void assignedOfficerCanMoveClaimToUnderReview() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.ASSIGNED, 2L)));
         when(claims.save(any(Claim.class))).thenAnswer(call -> call.getArgument(0));
-        when(userClient.getByUsername("staff1")).thenReturn(staff(2, 5, true));
+        when(userClient.getByUsername("officer1")).thenReturn(officer(2, 5, true));
 
-        Claim result = service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, "Started"), STAFF);
+        Claim result = service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, "Started"), OFFICER);
 
         assertThat(result.getStatus()).isEqualTo(ClaimStatus.UNDER_REVIEW);
         verify(history).save(any(ClaimHistory.class));
     }
 
     @Test
-    void staffCannotUpdateClaimAssignedToSomeoneElse() {
+    void officerCannotUpdateClaimAssignedToSomeoneElse() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.ASSIGNED, 9L)));
-        when(userClient.getByUsername("staff1")).thenReturn(staff(2, 5, true));
+        when(userClient.getByUsername("officer1")).thenReturn(officer(2, 5, true));
 
-        assertThatThrownBy(() -> service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, null), STAFF))
+        assertThatThrownBy(() -> service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, null), OFFICER))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    void staffCanPickUpUnassignedClaimAndMoveItToUnderReview() {
+    void officerCanPickUpUnassignedClaimAndMoveItToUnderReview() {
         Claim submitted = claim(1, ClaimStatus.OPEN, null);
         when(claims.findById(1L)).thenReturn(Optional.of(submitted));
         when(claims.save(any(Claim.class))).thenAnswer(call -> call.getArgument(0));
-        when(userClient.getByUsername("staff1")).thenReturn(staff(2, 5, true));
-        when(claims.countOpenByStaff(2L)).thenReturn(1L);
+        when(userClient.getByUsername("officer1")).thenReturn(officer(2, 5, true));
+        when(claims.countOpenByOfficer(2L)).thenReturn(1L);
 
-        Claim result = service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, null), STAFF);
+        Claim result = service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, null), OFFICER);
 
         assertThat(result.getStatus()).isEqualTo(ClaimStatus.UNDER_REVIEW);
-        assertThat(result.getAssignedStaffId()).isEqualTo(2L);
+        assertThat(result.getAssignedOfficerId()).isEqualTo(2L);
         verify(history, org.mockito.Mockito.times(2)).save(any(ClaimHistory.class));
     }
 
     @Test
-    void staffAtFullCapacityCannotPickUpUnassignedClaim() {
+    void officerAtFullCapacityCannotPickUpUnassignedClaim() {
         when(claims.findById(1L)).thenReturn(Optional.of(claim(1, ClaimStatus.OPEN, null)));
-        when(userClient.getByUsername("staff1")).thenReturn(staff(2, 1, true));
-        when(claims.countOpenByStaff(2L)).thenReturn(1L);
+        when(userClient.getByUsername("officer1")).thenReturn(officer(2, 1, true));
+        when(claims.countOpenByOfficer(2L)).thenReturn(1L);
 
-        assertThatThrownBy(() -> service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, null), STAFF))
+        assertThatThrownBy(() -> service.updateStatus(1, new UpdateStatusRequest(ClaimStatus.UNDER_REVIEW, null), OFFICER))
                 .isInstanceOf(BusinessRuleException.class).hasMessageContaining("full capacity");
     }
 

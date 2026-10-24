@@ -25,12 +25,12 @@ Created by `user-service`'s `DemoDataSeeder` when the users table is empty. All 
 |----------|----------|------|---------|
 | `claimant1` | `claimant123` | CLAIMANT | 1 (Aiko Tanaka) |
 | `claimant2` | `claimant123` | CLAIMANT | 2 (Wei Lim) |
-| `staff1` | `staff123` | STAFF | 3 (Priya Nair, capacity 5) |
-| `staff2` | `staff123` | STAFF | 4 (Daniel Chen, capacity 8) |
+| `officer1` | `officer123` | OFFICER | 3 (Priya Nair, capacity 5) |
+| `officer2` | `officer123` | OFFICER | 4 (Daniel Chen, capacity 8) |
 | `manager1` | `manager123` | MANAGER | 5 (Maria Santos) |
 
-* A claim's `claimantId` and `assignedStaffId` are **user ids**. `assignedStaffId` must belong to a STAFF user (3 or 4);
-  assigning 1 or 5 fails with 409 "User … is not a staff member". Only `staff1` and `staff2` exist (no `staff3`/`staff4`).
+* A claim's `claimantId` and `assignedOfficerId` are **user ids**. `assignedOfficerId` must belong to an OFFICER user (3 or 4);
+  assigning 1 or 5 fails with 409 "User … is not an officer". Only `officer1` and `officer2` exist (no `officer3`/`officer4`).
 * Logins are by username, never by id. Data is in-memory H2, so users, claims and ids reset on every restart.
 
 ## Authentication flow
@@ -41,7 +41,7 @@ Created by `user-service`'s `DemoDataSeeder` when the users table is empty. All 
   token without `Bearer `. The login is remembered across reloads (`springdoc.swagger-ui.persist-authorization` in
   `api-gateway/src/main/resources/application.yml`); click **Logout** in the dialog before switching user.
 * Status codes: **401** no/invalid/expired token or bad login; **403** role not allowed or not your resource;
-  **409** business rule broken (illegal status move, assignee not staff, staff at full capacity); **400** validation.
+  **409** business rule broken (illegal status move, assignee not an officer, officer at full capacity); **400** validation.
 
 ## Commands
 
@@ -86,21 +86,21 @@ Needs JDK 21 (`JAVA_HOME`). `scripts/start-all.ps1` builds and launches everythi
   `@SpringBootApplication` class, so `@WebMvcTest`/`@DataJpaTest` slices don't try to create them), and declare small
   `record` views of only the fields they need. `claim-service` and `workload-service` each have one `UserClient`
   calling `user-service`.
-* **Security:** roles are `CLAIMANT`, `STAFF`, `MANAGER`. Use `@PreAuthorize("hasRole(..)")` for role gates; ownership
-  rules (claimant sees only their own data, staff only update claims assigned to them) belong in the service layer.
+* **Security:** roles are `CLAIMANT`, `OFFICER`, `MANAGER`. Use `@PreAuthorize("hasRole(..)")` for role gates; ownership
+  rules (claimant sees only their own data, officers only update claims assigned to them) belong in the service layer.
   `claim-service` passes a framework-free `Caller` record into services to keep them unit-testable.
 * **Claim workflow** is defined once in `ClaimStatus.canTransitionTo`. Every state change must write a
-  `claim_history` row (`ClaimService.record`, saved through `ClaimHistoryRepository`). `ASSIGNED` is only set by the assignment operation, or when STAFF pick up an unassigned `OPEN` claim by updating its status (`ClaimService.claimForStaff`: self-assigns, capacity-checked, history row written). A claim assigned to another staff member still gives 403 "Claim is not assigned to you".
+  `claim_history` row (`ClaimService.record`, saved through `ClaimHistoryRepository`). `ASSIGNED` is only set by the assignment operation, or when OFFICERS pick up an unassigned `OPEN` claim by updating its status (`ClaimService.claimForOfficer`: self-assigns, capacity-checked, history row written). A claim assigned to another officer still gives 403 "Claim is not assigned to you".
 * **Workload** = claims in `ASSIGNED`/`UNDER_REVIEW`. Defined once in `ClaimStatus.IN_PROGRESS` and used by the repository
   count queries.
-* DTOs are Java `record`s with Jakarta Validation annotations; entities are JPA `@Entity` classes (private fields, getters, no setters; state changes go through intention-revealing methods such as `Claim.assignTo`) in each service's `entity` package. Cross-service references (`claimantId`, `assignedStaffId`) are plain columns, never joins.
+* DTOs are Java `record`s with Jakarta Validation annotations; entities are JPA `@Entity` classes (private fields, getters, no setters; state changes go through intention-revealing methods such as `Claim.assignTo`) in each service's `entity` package. Cross-service references (`claimantId`, `assignedOfficerId`) are plain columns, never joins.
   New endpoints need a Swagger `@Operation(summary = ..)`.
 
 ## Testing conventions
 
 * JUnit 5 + Mockito (`@ExtendWith(MockitoExtension.class)`) for services; AssertJ assertions.
 * `@WebMvcTest` + `@Import(CommonAutoConfiguration.class)` + `@MockBean` service for controller security/validation
-  (use `jwt().jwt(t -> t.subject("user")).authorities(new SimpleGrantedAuthority("ROLE_STAFF"))` instead of real tokens).
+  (use `jwt().jwt(t -> t.subject("user")).authorities(new SimpleGrantedAuthority("ROLE_OFFICER"))` instead of real tokens).
 * `@DataJpaTest` for repositories (Hibernate creates the schema on embedded H2).
 * `@SpringBootTest` + `@AutoConfigureMockMvc` for full flows, e.g. `AuthFlowIntegrationTest` in `user-service`
   (real login, real token, real filter chain, seeded demo users).
@@ -122,6 +122,6 @@ Needs JDK 21 (`JAVA_HOME`). `scripts/start-all.ps1` builds and launches everythi
 
 ## Known simplifications
 
-* One `users` table in `user-service` holds claimants, staff and managers (single `User` entity; the role decides which profile columns apply). No refresh tokens / token revocation / self-service password change.
+* One `users` table in `user-service` holds claimants, officers and managers (single `User` entity; the role decides which profile columns apply). No refresh tokens / token revocation / self-service password change.
 * The JWT secret has a built-in demo default; every service must share the same `CHUBB_SECURITY_JWT_SECRET` outside local use.
 * No service discovery: services and the gateway call each other at fixed URLs (`services.<name>.url`, defaulting to localhost:8081-8084).
