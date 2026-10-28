@@ -2,6 +2,7 @@ package com.chubb.claims.user.service;
 
 import com.chubb.claims.common.exception.BusinessRuleException;
 import com.chubb.claims.common.exception.ResourceNotFoundException;
+import com.chubb.claims.common.model.Market;
 import com.chubb.claims.user.dto.CreateUserRequest;
 import com.chubb.claims.user.dto.UpdateUserRequest;
 import com.chubb.claims.user.entity.Role;
@@ -37,7 +38,7 @@ public class UserService {
         }
         User user = new User(request.username(), passwordEncoder.encode(request.password()), request.role(),
                 request.fullName(), request.email(), request.phone(), request.active() == null || request.active());
-        applyRoleDetails(user, request.country(), request.policyNumber(), request.specialization(),
+        applyRoleDetails(user, request.market(), request.policyNumber(), request.specialization(),
                 request.maxCapacity());
         return repository.save(user);
     }
@@ -60,7 +61,7 @@ public class UserService {
         User user = getById(id);
         user.updateProfile(request.fullName(), request.email(), request.phone(),
                 request.active() == null || request.active());
-        applyRoleDetails(user, request.country(), request.policyNumber(), request.specialization(),
+        applyRoleDetails(user, request.market(), request.policyNumber(), request.specialization(),
                 request.maxCapacity());
         if (StringUtils.hasText(request.password())) {
             user.changePasswordHash(passwordEncoder.encode(request.password()));
@@ -77,14 +78,14 @@ public class UserService {
     }
 
     /** Stores only the profile fields that belong to the user's role, and insists on the mandatory ones. */
-    private void applyRoleDetails(User user, String country, String policyNumber, String specialization,
+    private void applyRoleDetails(User user, Market market, String policyNumber, String specialization,
                                   Integer maxCapacity) {
         switch (user.getRole()) {
             case CLAIMANT -> {
-                if (!StringUtils.hasText(country) || !StringUtils.hasText(policyNumber)) {
-                    throw new IllegalArgumentException("Claimants require country and policyNumber");
+                if (market == null || !StringUtils.hasText(policyNumber)) {
+                    throw new IllegalArgumentException("Claimants require market and policyNumber");
                 }
-                user.setClaimantDetails(country, policyNumber);
+                user.setClaimantDetails(market, policyNumber);
             }
             case OFFICER -> {
                 if (!StringUtils.hasText(specialization) || maxCapacity == null) {

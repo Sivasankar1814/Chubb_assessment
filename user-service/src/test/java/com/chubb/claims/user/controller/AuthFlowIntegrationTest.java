@@ -50,6 +50,15 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void demoClaimantsCoverAllSixMarkets() throws Exception {
+        String token = login("manager1", "manager123");
+
+        mvc.perform(get("/api/users?role=CLAIMANT").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].market").value(org.hamcrest.Matchers.hasItems("SG", "HK", "JP", "TH", "IN", "ID")));
+    }
+
+    @Test
     void tokenResolvesToTheRightProfile() throws Exception {
         String token = login("officer1", "officer123");
 
@@ -58,6 +67,16 @@ class AuthFlowIntegrationTest {
                 .andExpect(jsonPath("$.username").value("officer1"))
                 .andExpect(jsonPath("$.role").value("OFFICER"))
                 .andExpect(jsonPath("$.maxCapacity").value(5));
+    }
+
+    @Test
+    void claimantProfileCarriesTheirMarket() throws Exception {
+        String token = login("claimant1", "claimant123");
+
+        mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.market").value("JP"))
+                .andExpect(jsonPath("$.country").doesNotExist());
     }
 
     @Test
@@ -81,7 +100,7 @@ class AuthFlowIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"fullName":"Wei Lim","email":"wei.lim@example.com","active":false,
-                                 "country":"Singapore","policyNumber":"POL-SG-0002"}"""))
+                                 "market":"SG","policyNumber":"POL-SG-0002"}"""))
                 .andExpect(status().isOk());
 
         attemptLogin("claimant2", "claimant123").andExpect(status().isUnauthorized());

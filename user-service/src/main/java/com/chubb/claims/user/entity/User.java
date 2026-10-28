@@ -1,5 +1,6 @@
 package com.chubb.claims.user.entity;
 
+import com.chubb.claims.common.model.Market;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -13,7 +14,7 @@ import java.time.LocalDateTime;
 
 /**
  * Every person in the system: claimants, claims officers and managers. Identity and login live here; the role decides
- * which of the profile columns apply (claimants: country/policyNumber, officers: specialization/maxCapacity).
+ * which of the profile columns apply (claimants: market/policyNumber, officers: specialization/maxCapacity).
  */
 @Entity
 @Table(name = "users")
@@ -45,8 +46,9 @@ public class User {
     @Column(nullable = false)
     private boolean active;
 
-    @Column(length = 50)
-    private String country;
+    @Enumerated(EnumType.STRING)
+    @Column(length = 2)
+    private Market market;
 
     @Column(length = 30)
     private String policyNumber;
@@ -80,8 +82,8 @@ public class User {
         this.active = active;
     }
 
-    public void setClaimantDetails(String country, String policyNumber) {
-        this.country = country;
+    public void setClaimantDetails(Market market, String policyNumber) {
+        this.market = market;
         this.policyNumber = policyNumber;
     }
 
@@ -131,8 +133,8 @@ public class User {
         return active;
     }
 
-    public String getCountry() {
-        return country;
+    public Market getMarket() {
+        return market;
     }
 
     public String getPolicyNumber() {

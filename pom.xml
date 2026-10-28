@@ -14,7 +14,7 @@
     <artifactId>claims-management-system</artifactId>
     <version>1.0.0</version>
     <packaging>pom</packaging>
-    <name>Chubb APAC Claims Management System</name>
+    <name>Chubb APAC Backend Claim Management</name>
 
     <modules>
         <module>common</module>

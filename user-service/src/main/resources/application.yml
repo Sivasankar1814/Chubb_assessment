@@ -16,7 +16,7 @@ spring:
     console:
       enabled: true
 
-# Seed the demo users (claimant1/2, officer1/2, manager1) when the users table is empty; set false in production.
+# Seed the demo users (claimant1-6, officer1/2, manager1) when the users table is empty; set false in production.
 chubb:
   seed-demo-users: true
 

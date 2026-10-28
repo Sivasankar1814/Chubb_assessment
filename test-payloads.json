@@ -3,7 +3,8 @@
     "Sample request bodies for testing through the gateway (http://localhost:8080) or Swagger UI (http://localhost:8080/swagger-ui.html).",
     "Each entry lists the HTTP call, who may make it (login first with the 'login' payloads) and the JSON body.",
     "Send the returned accessToken as 'Authorization: Bearer <token>'.",
-    "Demo user ids (reset on every restart): claimant1=1, claimant2=2, officer1=3, officer2=4, manager1=5.",
+    "Demo user ids (reset on every restart): claimant1=1 (JP), claimant2=2 (SG), officer1=3, officer2=4, manager1=5, claimant3=6 (HK), claimant4=7 (TH), claimant5=8 (IN), claimant6=9 (ID).",
+    "A claim's market is taken from the claimant, never sent in the body. 14 demo claims are seeded on start-up.",
     "Suggested order: login -> createClaim -> pickUp/assign -> status moves -> history -> workload."
   ],
 
@@ -19,14 +20,14 @@
     "createClaimant": {
       "call": "POST /api/users  (OFFICER or MANAGER)",
       "body": {
-        "username": "claimant3",
+        "username": "claimant7",
         "password": "claimant123",
         "role": "CLAIMANT",
-        "fullName": "Mei Chen",
-        "email": "mei.chen@example.com",
+        "fullName": "Lim Hui Min",
+        "email": "lim.huimin@example.com",
         "phone": "+65-91234567",
-        "country": "Singapore",
-        "policyNumber": "POL-SG-1003"
+        "market": "SG",
+        "policyNumber": "POL-SG-1007"
       }
     },
     "createOfficer": {
@@ -55,8 +56,10 @@
 
   "claims": {
     "createHealth": {
-      "call": "POST /api/claims  (CLAIMANT files for themselves)",
+      "call": "POST /api/claims  (claimant1 files for themselves; claimantName and market must match their profile)",
       "body": {
+        "claimantName": "Aiko Tanaka",
+        "market": "JP",
         "claimType": "HEALTH",
         "description": "Hospitalisation for appendectomy, 3 nights",
         "claimAmount": 4200.50,
@@ -64,8 +67,10 @@
       }
     },
     "createMotor": {
-      "call": "POST /api/claims  (CLAIMANT)",
+      "call": "POST /api/claims  (claimant1)",
       "body": {
+        "claimantName": "Aiko Tanaka",
+        "market": "JP",
         "claimType": "MOTOR",
         "description": "Rear-ended at traffic light, bumper and boot damage",
         "claimAmount": 1500.00,
@@ -76,6 +81,8 @@
       "call": "POST /api/claims  (OFFICER or MANAGER files for a claimant; claimantId is required)",
       "body": {
         "claimantId": 2,
+        "claimantName": "Wei Lim",
+        "market": "SG",
         "claimType": "TRAVEL",
         "description": "Cancelled flight to Tokyo, non-refundable hotel booking",
         "claimAmount": 980.00,
@@ -83,8 +90,10 @@
       }
     },
     "createProperty": {
-      "call": "POST /api/claims  (CLAIMANT)",
+      "call": "POST /api/claims  (claimant1)",
       "body": {
+        "claimantName": "Aiko Tanaka",
+        "market": "JP",
         "claimType": "PROPERTY",
         "description": "Water damage to living room ceiling after pipe burst",
         "claimAmount": 7800.00,
@@ -92,8 +101,10 @@
       }
     },
     "createLiability": {
-      "call": "POST /api/claims  (CLAIMANT)",
+      "call": "POST /api/claims  (claimant1)",
       "body": {
+        "claimantName": "Aiko Tanaka",
+        "market": "JP",
         "claimType": "LIABILITY",
         "description": "Visitor slipped on wet floor at insured premises",
         "claimAmount": 12000.00,
@@ -114,8 +125,14 @@
   },
 
   "status": {
-    "_note": "PATCH /api/claims/{id}/status (OFFICER on own or unassigned OPEN claims, MANAGER on any). An officer update on an unassigned OPEN claim picks it up automatically. Flow: OPEN -> ASSIGNED -> UNDER_REVIEW -> APPROVED|REJECTED; APPROVED -> SETTLED -> CLOSED; REJECTED -> CLOSED.",
+    "_note": "PATCH /api/claims/{id}/status (OFFICER on own or unassigned OPEN claims, MANAGER on any). An officer update on an unassigned OPEN claim picks it up automatically. Flow: OPEN -> ASSIGNED -> UNDER_REVIEW -> APPROVED|REJECTED; APPROVED -> SETTLED -> CLOSED; REJECTED -> CLOSED. While reviewing, staff can ask the claimant for more information (UNDER_REVIEW -> ON_HOLD, remarks required); the claim is then ON HOLD: staff cannot resume, approve, reject or settle it (409), they can only close it, and only the claimant's answer through this same endpoint (see 'provideInfo') puts it back to UNDER_REVIEW. The response is the updated claim plus previousStatus, remarks, changedBy and changedAt.",
     "startReview": { "status": "UNDER_REVIEW", "remarks": "Documents received, starting review" },
+    "requestInfo": { "status": "ON_HOLD", "remarks": "Please send the repair invoice and photos of the damage" },
+    "provideInfo": {
+      "_note": "Sent by the CLAIMANT who owns the claim, only while it is ON_HOLD. remarks is the reply and is mandatory; the claim goes back to UNDER_REVIEW and the reply is shown as lastReply.",
+      "status": "UNDER_REVIEW",
+      "remarks": "Repair invoice INV-77 (JPY 48,000) and photos uploaded to the claims portal"
+    },
     "approve": { "status": "APPROVED", "remarks": "Claim verified against policy" },
     "reject": { "status": "REJECTED", "remarks": "Incident not covered under policy section 4.2" },
     "settle": { "status": "SETTLED", "remarks": "Payment released" },
@@ -127,8 +144,12 @@
     "history": "GET /api/claims/1/history",
     "listAll": "GET /api/claims",
     "listOpen": "GET /api/claims?status=OPEN",
+    "listOnHold": "GET /api/claims?status=ON_HOLD",
     "listForOfficer": "GET /api/claims?assignedOfficerId=3",
     "listForClaimant": "GET /api/claims?claimantId=1  (OFFICER or MANAGER)",
+    "listByMarket": "GET /api/claims?market=JP",
+    "listPropertyInMarket": "GET /api/claims?market=SG&claimType=PROPERTY",
+    "listMotor": "GET /api/claims?claimType=MOTOR",
     "workloadAllOfficers": "GET /api/workload  (OFFICER or MANAGER)",
     "workloadOneOfficer": "GET /api/workload/3",
     "workloadSuggestion": "GET /api/workload/suggestion",
@@ -138,21 +159,79 @@
 
   "negativeTests": {
     "_note": "Each of these should fail; the expected status is listed.",
+    "_noteClaims": "The POST /api/claims negatives below are sent as claimant1 (Aiko Tanaka, JP).",
     "createClaimZeroAmount": {
       "call": "POST /api/claims  -> 400 Validation failed",
-      "body": { "claimType": "MOTOR", "description": "Zero amount", "claimAmount": 0, "incidentDate": "2026-10-15" }
+      "body": { "claimantName": "Aiko Tanaka", "market": "JP", "claimType": "MOTOR", "description": "Zero amount", "claimAmount": 0, "incidentDate": "2026-10-15" }
     },
     "createClaimFutureDate": {
       "call": "POST /api/claims  -> 400 Validation failed",
-      "body": { "claimType": "MOTOR", "description": "Future incident", "claimAmount": 100, "incidentDate": "2030-01-01" }
+      "body": { "claimantName": "Aiko Tanaka", "market": "JP", "claimType": "MOTOR", "description": "Future incident", "claimAmount": 100, "incidentDate": "2030-01-01" }
     },
     "createClaimBlankDescription": {
       "call": "POST /api/claims  -> 400 Validation failed",
-      "body": { "claimType": "HEALTH", "description": "", "claimAmount": 100, "incidentDate": "2026-10-10" }
+      "body": { "claimantName": "Aiko Tanaka", "market": "JP", "claimType": "HEALTH", "description": "", "claimAmount": 100, "incidentDate": "2026-10-10" }
     },
     "createClaimUnknownType": {
       "call": "POST /api/claims  -> 400 malformed request",
-      "body": { "claimType": "PET", "description": "Unknown type", "claimAmount": 100, "incidentDate": "2026-10-10" }
+      "body": { "claimantName": "Aiko Tanaka", "market": "JP", "claimType": "PET", "description": "Unknown type", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "requestInfoWithoutRemarks": {
+      "call": "PATCH /api/claims/{id}/status  (OFFICER or MANAGER, claim UNDER_REVIEW) -> 409 Remarks are mandatory when requesting information",
+      "body": { "status": "ON_HOLD" }
+    },
+    "requestInfoBeforeReview": {
+      "call": "PATCH /api/claims/{id}/status  (claim still ASSIGNED) -> 409 Cannot move claim from ASSIGNED to ON_HOLD",
+      "body": { "status": "ON_HOLD", "remarks": "Please send the invoice" }
+    },
+    "resumeWhileOnHold": {
+      "call": "PATCH /api/claims/{id}/status  (OFFICER or MANAGER, claim ON_HOLD; same for APPROVED, REJECTED, SETTLED) -> 409 Claim is on hold: waiting for the claimant to provide the requested information",
+      "body": { "status": "UNDER_REVIEW", "remarks": "Going ahead without the documents" }
+    },
+    "provideInfoWhenNothingRequested": {
+      "call": "PATCH /api/claims/{id}/status  (claimant, claim not ON_HOLD) -> 409 No information has been requested",
+      "body": { "status": "UNDER_REVIEW", "remarks": "Here is the invoice" }
+    },
+    "provideInfoOnSomeoneElsesClaim": {
+      "call": "PATCH /api/claims/{id}/status  (another claimant) -> 403",
+      "body": { "status": "UNDER_REVIEW", "remarks": "Here is the invoice" }
+    },
+    "provideInfoAnyOtherStatus": {
+      "call": "PATCH /api/claims/{id}/status  (claimant asking for APPROVED, CLOSED, ...) -> 403 Claimants can only answer an information request",
+      "body": { "status": "APPROVED", "remarks": "Please approve" }
+    },
+    "provideInfoBlankRemarks": {
+      "call": "PATCH /api/claims/{id}/status  (claimant, claim ON_HOLD) -> 409 Remarks are mandatory when answering an information request",
+      "body": { "status": "UNDER_REVIEW", "remarks": "  " }
+    },
+    "createClaimMissingMarket": {
+      "call": "POST /api/claims  -> 400 Validation failed (market is required)",
+      "body": { "claimantName": "Aiko Tanaka", "claimType": "MOTOR", "description": "No market sent", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "createClaimMissingName": {
+      "call": "POST /api/claims  -> 400 Validation failed (claimantName is required)",
+      "body": { "market": "JP", "claimType": "MOTOR", "description": "No name sent", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "createClaimUnknownMarket": {
+      "call": "POST /api/claims  -> 400 malformed request",
+      "body": { "claimantName": "Aiko Tanaka", "market": "XX", "claimType": "MOTOR", "description": "Unknown market", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "createClaimMarketMismatch": {
+      "call": "POST /api/claims  -> 409 Market SG does not match the market of claimant Aiko Tanaka (JP)",
+      "body": { "claimantName": "Aiko Tanaka", "market": "SG", "claimType": "MOTOR", "description": "Filing into another market", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "createClaimNameMismatch": {
+      "call": "POST /api/claims  -> 409 Name 'Wei Lim' does not match the name of claimant id 1",
+      "body": { "claimantName": "Wei Lim", "market": "JP", "claimType": "MOTOR", "description": "Someone else's name", "claimAmount": 100, "incidentDate": "2026-10-10" }
+    },
+    "listClaimsUnknownMarket": "GET /api/claims?market=XX  -> 400 malformed request",
+    "createClaimantUnknownMarket": {
+      "call": "POST /api/users  (OFFICER or MANAGER) -> 400 malformed request",
+      "body": { "username": "claimant8", "password": "claimant123", "role": "CLAIMANT", "fullName": "Test User", "email": "test.user@example.com", "market": "XX", "policyNumber": "POL-XX-0001" }
+    },
+    "createClaimantWithoutMarket": {
+      "call": "POST /api/users  (OFFICER or MANAGER) -> 400 Claimants require market and policyNumber",
+      "body": { "username": "claimant9", "password": "claimant123", "role": "CLAIMANT", "fullName": "Test User", "email": "test.user2@example.com", "policyNumber": "POL-SG-0009" }
     },
     "assignToClaimant": {
       "call": "PUT /api/claims/{id}/assignment  -> 409 User ... is not an officer",

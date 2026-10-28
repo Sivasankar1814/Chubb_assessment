@@ -1,5 +1,6 @@
 package com.chubb.claims.user.dto;
 
+import com.chubb.claims.common.model.Market;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
@@ -15,7 +16,7 @@ public record UpdateUserRequest(
         @Pattern(regexp = "^\\+?[0-9\\- ]{7,20}$", message = "must be a valid phone number") String phone,
         Boolean active,
         @Schema(description = "Leave empty to keep the current password") @Size(min = 6, max = 72) String password,
-        @Size(max = 50) String country,
+        Market market,
         @Size(max = 30) String policyNumber,
         @Size(max = 30) String specialization,
         @Min(1) @Max(100) Integer maxCapacity) {

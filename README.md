@@ -1,21 +1,15 @@
-# Chubb APAC – Claims Management System
+# Chubb APAC – Backend Claim Management
 
-A microservices-based claims platform built with **Java 21**, **Spring Boot 3.3**, **Spring Cloud 2023.0**
-(Gateway, OpenFeign), **Spring Security**, **Spring Data JPA** (H2 or MySQL) and **Springdoc OpenAPI**.
+A microservices-based claims platform for filing, assigning and tracking insurance claims across six APAC markets, built
+with **Java 21** and **Spring Boot 3.3**.
+
+![Technology stack: Java 21 and Maven; Spring Cloud Gateway, springdoc-openapi and Actuator at the edge; Spring Boot 3.3.5, OpenFeign, Bean Validation and a shared common library in the services; Spring Security with OAuth2 resource server, JWT and BCrypt; Spring Data JPA with H2 or MySQL; JUnit 5, Mockito and Spring Boot Test](docs/tech-stack.svg)
 
 ## Architecture
 
-```
-                         ┌────────────────────┐
-   client ─────────────► │  api-gateway :8080 │  routes /api/** and aggregates Swagger UI
-                         └─────────┬──────────┘
-                                   │ fixed URLs (services.*.url properties)
-              ┌────────────────────┼────────────────────┐
-              ▼                    ▼                    ▼
-        user-service  ◄──────  claim-service ──►  workload-service
-          :8081                   :8083   ◄──────      :8084
-  (all users + login/JWT)
-```
+![System architecture: a client talks only to the api-gateway on port 8080, which routes by path to user-service (8081), claim-service (8083) and workload-service (8084); services call each other directly through Feign](docs/system-architecture.svg)
+
+The gateway reaches the services at fixed URLs (the `services.*.url` properties).
 
 | Module             | Port | Responsibility                                                         | Database          |
 |--------------------|------|------------------------------------------------------------------------|-------------------|
@@ -28,7 +22,7 @@ A microservices-based claims platform built with **Java 21**, **Spring Boot 3.3*
 Each service owns its own database (database-per-service). Cross-service data is fetched through **OpenFeign**
 (`claim-service → user-service`, `workload-service → user-service / claim-service`).
 There is deliberately **one** service for every kind of user: a `users` table holds identity, password hash and role, and
-the role decides which profile fields apply (claimants: country, policy number; officers: specialization, max capacity).
+the role decides which profile fields apply (claimants: market, policy number; officers: specialization, max capacity).
 
 ### Security
 
@@ -45,11 +39,20 @@ the role decides which profile fields apply (claimants: country, policy number; 
 
 | Username    | Password      | Role       | Linked record                     |
 |-------------|---------------|------------|-----------------------------------|
-| `claimant1` | `claimant123` | CLAIMANT   | user id 1 (Aiko Tanaka)           |
-| `claimant2` | `claimant123` | CLAIMANT   | user id 2 (Wei Lim)               |
+| `claimant1` | `claimant123` | CLAIMANT   | user id 1 (Aiko Tanaka, market JP) |
+| `claimant2` | `claimant123` | CLAIMANT   | user id 2 (Wei Lim, market SG)    |
 | `officer1`  | `officer123`  | OFFICER    | user id 3 (Priya Nair, cap. 5)    |
 | `officer2`  | `officer123`  | OFFICER    | user id 4 (Daniel Chen, cap. 8)   |
 | `manager1`  | `manager123`  | MANAGER    | user id 5 (Maria Santos)          |
+| `claimant3` | `claimant123` | CLAIMANT   | user id 6 (Mei Chen, market HK)   |
+| `claimant4` | `claimant123` | CLAIMANT   | user id 7 (Somchai Prasert, market TH) |
+| `claimant5` | `claimant123` | CLAIMANT   | user id 8 (Arjun Mehta, market IN) |
+| `claimant6` | `claimant123` | CLAIMANT   | user id 9 (Budi Santoso, market ID) |
+
+**Demo claims.** `claim-service` also seeds 14 claims on first start (`chubb.seed-demo-claims`, set to `false` wherever the
+demo users are off): a MOTOR and a PROPERTY claim in each of the six markets, plus a HEALTH claim (JP) and a TRAVEL claim
+(SG), spread over every status from `OPEN` to `CLOSED` with their history. Log in, then `GET /api/claims` (as a manager or
+officer) shows them all, and `?market=HK&claimType=PROPERTY` narrows them down.
 
 > The in-memory user store is deliberately simple for this exercise. For production, replace the lookup in
 > `AuthService` in `user-service` with an identity-provider backed implementation (the users table already
@@ -62,7 +65,7 @@ the role decides which profile fields apply (claimants: country, policy number; 
 | `POST /api/claims`                         | own claim        | on behalf of claimant          | ✔       |
 | `GET /api/claims`, `/{id}`, `/{id}/history`| own claims only  | all                            | all     |
 | `PUT /api/claims/{id}/assignment`          | ✖                | ✖                              | ✔       |
-| `PATCH /api/claims/{id}/status`            | ✖                | only claims assigned to them   | ✔       |
+| `PATCH /api/claims/{id}/status`            | own claim, only to answer an information request | only claims assigned to them | ✔ |
 | `POST /api/auth/login`                     | ✔ (public)       | ✔ (public)                     | ✔ (public) |
 | `GET /api/users/me`, `/api/users/{id}`     | own profile only | any user                       | any user |
 | `GET /api/users?role=&active=`             | ✖                | ✔                              | ✔       |
@@ -75,19 +78,43 @@ the role decides which profile fields apply (claimants: country, policy number; 
 
 **Claim status workflow** (`ClaimStatus`):
 
-```
-OPEN ─► ASSIGNED ─► UNDER_REVIEW ─┬─► APPROVED ─► SETTLED ─► CLOSED
-    │            │                      └─► REJECTED ─► CLOSED
-    └────────────┴──► CLOSED
-```
+![Claim status flow: OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, SETTLED, CLOSED; asking for more information puts a claim ON_HOLD until the claimant replies; a rejected claim is closed; a claim can be closed early](docs/claim-status-flow.svg)
+
+An officer or manager can ask the claimant for more information while a claim is under review. The claim is then
+`ON_HOLD`: the flow stops until the claimant submits the information, and after that the officer or manager processes it
+as usual.
 
 * Any other transition returns **409 Conflict** listing the allowed next statuses.
 * `ASSIGNED` can only be reached through the assignment endpoint; rejecting a claim requires `remarks`.
+* **Asking for more information**: `PATCH /api/claims/{id}/status` with `{"status":"ON_HOLD","remarks":"what is needed"}`
+  (assigned officer or manager, only from `UNDER_REVIEW`; remarks are mandatory). The claim then shows `infoRequest`
+  (`message`, `requestedBy`, `requestedAt`), so the claimant sees what to provide.
+* **Providing it**: the claimant calls the same endpoint, `PATCH /api/claims/{id}/status`, with
+  `{"status":"UNDER_REVIEW","remarks":"<the reply>"}` (remarks up to 500 characters and mandatory, **409** if blank). It only
+  works on their own claim (**403** otherwise) and only while the claim is `ON_HOLD` (**409** otherwise); a claimant
+  asking for any other status gets **403**. The claim goes straight back to `UNDER_REVIEW`, the reply is kept as `lastReply`
+  (`message`, `repliedBy`, `repliedAt`) and both steps appear in the history (`INFO_REQUESTED`, `INFO_PROVIDED`). The officer
+  or manager then approves or rejects as usual.
+* **On hold until the claimant answers**: while a claim is `ON_HOLD` the flow stops. The officer and the manager
+  cannot move it to `UNDER_REVIEW`, approve, reject or settle it (**409** "Claim is on hold"); only the claimant's reply
+  resumes review. Staff can still close it (for example when the claimant never replies) and a manager can still reassign it.
 * Assignment verifies the officer exists and is active, is not already the assignee, and has spare
   capacity (`open claims < maxCapacity`). Reassigning keeps the current status.
-* **History**: every creation, assignment/reassignment and status change is appended to `claim_history`
-  (who, when, from → to, remarks).
-* **Workload**: open claims = claims in `ASSIGNED` or `UNDER_REVIEW`.
+* **Markets**: `SG`, `HK`, `JP`, `TH`, `IN`, `ID`. Every claimant has one (required when registering a claimant).
+  `POST /api/claims` requires `claimantName` and `market` in the body, and both must match the claimant (the name ignoring
+  case and spaces), otherwise **409**, so a claimant cannot file into another market. A claimant with no market also gets
+  **409**. The claim stores the claimant's name and market as they were when it was filed, and every claim returned shows
+  `claimantName`, `market` and `claimantId`. Filter with
+  `GET /api/claims?market=SG&claimType=PROPERTY` (both optional, combinable with `status`, `claimantId` and
+  `assignedOfficerId`); an unknown market or type returns **400**.
+* **History**: every creation, assignment/reassignment, status change, information request and reply is appended to `claim_history`
+  (who, when, from → to, remarks). `GET /api/claims/{id}/history` also shows each entry's `claimId`, `claimantName` and
+  `market`.
+* **Status update response**: `PATCH /api/claims/{id}/status` returns the updated claim with all its usual fields, plus
+  `previousStatus` (the status before the request), and the `remarks`, `changedBy` and `changedAt` of the change. When an
+  officer's update also picks up an `OPEN` claim, `previousStatus` is `OPEN` and the history lists the `ASSIGNED` step too.
+* **Workload**: open claims = claims in `ASSIGNED`, `UNDER_REVIEW` or `ON_HOLD` (the officer still owns a claim that
+  has asked the claimant for more information).
   `utilization % = open / maxCapacity × 100`; level `LOW` (<50), `MODERATE` (<80), `HIGH` (<100), `FULL` (≥100).
 
 ## Prerequisites
@@ -134,7 +161,7 @@ H2 (in-memory, MySQL compatibility mode) is the default and needs no setup; the 
 on start-up. To use MySQL run `user-service` and `claim-service` with `--spring.profiles.active=mysql`.
 Databases `user_db` and `claim_db` are created automatically; override the connection with
 environment variables `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (defaults: `jdbc:mysql://localhost:3306/<db>`,
-`root` / `root`). Tables are generated from the JPA entities; demo users are only seeded into an empty users table.
+`root` / `root`). Tables are generated from the JPA entities; demo users and demo claims are only seeded into empty tables.
 H2 consoles are available at `http://localhost:808{1,3}/h2-console` (JDBC URL `jdbc:h2:mem:<userdb|claimdb>`, user `sa`).
 
 ## API documentation (Swagger UI)
@@ -154,9 +181,9 @@ login() { curl -s -H "Content-Type: application/json" -X POST http://localhost:8
   -d "{\"username\":\"$1\",\"password\":\"$2\"}" | sed -E 's/.*"accessToken":"([^"]+)".*/\1/'; }
 CLAIMANT=$(login claimant1 claimant123); MANAGER=$(login manager1 manager123); OFFICER2=$(login officer2 officer123)
 
-# 1. claimant files a claim (claimant id is taken from the logged-in user)
+# 1. claimant files a claim (claimant id is taken from the logged-in user; name and market must match their profile)
 curl -H "Authorization: Bearer $CLAIMANT" -H "Content-Type: application/json" -X POST http://localhost:8080/api/claims \
-  -d '{"claimType":"MOTOR","description":"Rear-ended at lights","claimAmount":1500.00,"incidentDate":"2026-10-01"}'
+  -d '{"claimantName":"Aiko Tanaka","market":"JP","claimType":"MOTOR","description":"Rear-ended at lights","claimAmount":1500.00,"incidentDate":"2026-10-01"}'
 
 # 2. manager asks which officer has capacity, then assigns the claim
 curl -H "Authorization: Bearer $MANAGER" http://localhost:8080/api/workload/suggestion

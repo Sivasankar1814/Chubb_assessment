@@ -2,12 +2,16 @@ package com.chubb.claims.claim.controller;
 
 import com.chubb.claims.claim.dto.AssignClaimRequest;
 import com.chubb.claims.claim.dto.CreateClaimRequest;
+import com.chubb.claims.claim.dto.StatusUpdateResponse;
 import com.chubb.claims.claim.dto.UpdateStatusRequest;
 import com.chubb.claims.claim.entity.Claim;
 import com.chubb.claims.claim.entity.ClaimHistory;
 import com.chubb.claims.claim.model.ClaimStatus;
+import com.chubb.claims.claim.model.ClaimType;
 import com.chubb.claims.claim.security.Caller;
 import com.chubb.claims.claim.service.ClaimService;
+import com.chubb.claims.claim.service.StatusChange;
+import com.chubb.claims.common.model.Market;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -46,12 +50,15 @@ public class ClaimController {
     }
 
     @GetMapping
-    @Operation(summary = "List claims (claimants only see their own)")
+    @Operation(summary = "List claims, optionally by status, claimant, officer, market (SG, HK, JP, TH, IN, ID) or "
+            + "claim type (claimants only see their own)")
     public List<Claim> list(@RequestParam(required = false) ClaimStatus status,
                             @RequestParam(required = false) Long claimantId,
                             @RequestParam(required = false) Long assignedOfficerId,
+                            @RequestParam(required = false) Market market,
+                            @RequestParam(required = false) ClaimType claimType,
                             Authentication auth) {
-        return service.list(status, claimantId, assignedOfficerId, Caller.from(auth));
+        return service.list(status, claimantId, assignedOfficerId, market, claimType, Caller.from(auth));
     }
 
     @GetMapping("/{id}")
@@ -74,11 +81,15 @@ public class ClaimController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('OFFICER','MANAGER')")
-    @Operation(summary = "Move a claim to its next status (assigned officer or manager)")
-    public Claim updateStatus(@PathVariable long id, @Valid @RequestBody UpdateStatusRequest request,
-                              Authentication auth) {
-        return service.updateStatus(id, request, Caller.from(auth));
+    @PreAuthorize("hasAnyRole('CLAIMANT','OFFICER','MANAGER')")
+    @Operation(summary = "Move a claim to its next status (assigned officer or manager). ON_HOLD asks the "
+            + "claimant for more information and needs remarks. The claimant answers it on their own claim with status "
+            + "UNDER_REVIEW and the reply as remarks. Returns the claim plus previousStatus, remarks, changedBy and "
+            + "changedAt")
+    public StatusUpdateResponse updateStatus(@PathVariable long id, @Valid @RequestBody UpdateStatusRequest request,
+                                             Authentication auth) {
+        StatusChange change = service.updateStatus(id, request, Caller.from(auth));
+        return StatusUpdateResponse.from(change.claim(), change.previousStatus(), change.entry());
     }
 
     @GetMapping("/stats/open-by-officer")

@@ -1,6 +1,6 @@
 # AI-Assisted Development Journal
 
-**Project:** Chubb APAC Claims Management System
+**Project:** Chubb APAC Backend Claim Management
 **Tool:** Claude Code (CLI), used throughout design, implementation, debugging and documentation
 **Purpose of this document:** an honest account of how AI was used to build the system, where it helped, where it needed
 correction, and how its output was checked. Prompts are paraphrased and grouped by phase.

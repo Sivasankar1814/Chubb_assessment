@@ -32,7 +32,7 @@ class UserControllerTest {
 
     private static final String CLAIMANT_BODY = """
             {"username":"jdoe","password":"secret1","role":"CLAIMANT","fullName":"John Doe",
-             "email":"john@example.com","phone":"+65-91234567","country":"Singapore","policyNumber":"POL-1"}""";
+             "email":"john@example.com","phone":"+65-91234567","market":"SG","policyNumber":"POL-1"}""";
 
     @Autowired
     private MockMvc mvc;
@@ -87,6 +87,14 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content(CLAIMANT_BODY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1));
+    }
+
+    @Test
+    void unknownMarketIsRejectedWith400() throws Exception {
+        mvc.perform(post("/api/users").with(as("manager1", "MANAGER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CLAIMANT_BODY.replace("\"market\":\"SG\"", "\"market\":\"XX\"")))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

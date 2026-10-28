@@ -19,7 +19,7 @@ public class OpenApiConfig {
     public OpenAPI claimsOpenApi(@Value("${spring.application.name}") String appName) {
         return new OpenAPI()
                 .info(new Info().title("Chubb APAC Claims - " + appName).version("1.0.0")
-                        .description("Part of the Chubb APAC Claims Management System"))
+                        .description("Part of Chubb APAC Backend Claim Management"))
                 .components(new Components().addSecuritySchemes(SCHEME,
                         new SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")
                                 .description("Paste the accessToken returned by POST /api/auth/login")))

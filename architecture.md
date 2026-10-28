@@ -1,9 +1,12 @@
-# Architecture – Chubb APAC Claims Management System
+# Architecture – Chubb APAC Backend Claim Management
 
 How the system is put together and why. For setup, demo users and an API walkthrough see [README.md](README.md); for the
 rules to follow when changing code see [CLAUDE.md](CLAUDE.md).
 
-Diagrams use [Mermaid](https://mermaid.js.org/), which GitHub renders inline.
+![Technology stack: Java 21 and Maven; Spring Cloud Gateway, springdoc-openapi and Actuator at the edge; Spring Boot 3.3.5, OpenFeign, Bean Validation and a shared common library in the services; Spring Security with OAuth2 resource server, JWT and BCrypt; Spring Data JPA with H2 or MySQL; JUnit 5, Mockito and Spring Boot Test](docs/tech-stack.svg)
+
+The pictures are in `docs/` (SVG, each with a 2x PNG export). The remaining diagrams use
+[Mermaid](https://mermaid.js.org/), which GitHub renders inline.
 
 ## 1. Overview
 
@@ -17,6 +20,10 @@ applications share one Maven build and one library:
 * Data is in-memory H2 by default (resets on restart) and can be switched to MySQL per service.
 
 ## 2. System context
+
+![System architecture: a client talks only to the api-gateway on port 8080, which routes by path to user-service (8081), claim-service (8083) and workload-service (8084); services call each other directly through Feign](docs/system-architecture.svg)
+
+The picture is `docs/system-architecture.svg` (2x export: `docs/system-architecture.png`). The same system as a Mermaid diagram:
 
 ```mermaid
 flowchart LR
@@ -55,7 +62,7 @@ gateway) using OpenFeign at fixed URLs.
 |--------|------|-------|------|----------------|
 | `api-gateway` | 8080 | WebFlux, Spring Cloud Gateway, springdoc webflux-ui | – | Single entry point: path routing, aggregated Swagger UI, redirects of common wrong URLs to `/swagger-ui.html`. No security, no business logic. Does **not** depend on `common`. |
 | `user-service` | 8081 | MVC, JPA, `common` | `users` table | Every person in the system (claimants, officers, managers): profile, role, officer capacity, active flag. Login and JWT signing. Seeds demo users. |
-| `claim-service` | 8083 | MVC, JPA, `common` | `claims`, `claim_history` | Claim submission, assignment, status workflow, audit history, per-officer open-claim counts. |
+| `claim-service` | 8083 | MVC, JPA, `common` | `claims`, `claim_history` | Claim submission, assignment, status workflow, audit history, per-officer open-claim counts. Seeds demo claims. |
 | `workload-service` | 8084 | MVC, `common` | nothing (stateless) | Utilisation per officer and next-assignee suggestion, computed live from the two services above. |
 | `common` | – | plain jar | – | Shared auto-configuration: JWT validation and method security, global exception handler, Feign auth forwarding, OpenAPI bearer scheme. |
 
@@ -152,8 +159,8 @@ in the `roles` claim become `ROLE_<name>` authorities.
 
 | Layer | Where | Examples |
 |-------|-------|----------|
-| Role gate | `@PreAuthorize` on controller methods (`@EnableMethodSecurity` in `common`) | assignment is `MANAGER` only; status update is `OFFICER`/`MANAGER`; workload is `OFFICER`/`MANAGER` |
-| Ownership and state | service layer | a claimant sees only their own claims; officers can only update claims assigned to them (or pick up an unassigned `OPEN` one); claimants can read only their own profile |
+| Role gate | `@PreAuthorize` on controller methods (`@EnableMethodSecurity` in `common`) | assignment is `MANAGER` only; status update is `CLAIMANT`/`OFFICER`/`MANAGER` (the service narrows the claimant, see below); workload is `OFFICER`/`MANAGER` |
+| Ownership and state | service layer | a claimant sees only their own claims; officers can only update claims assigned to them (or pick up an unassigned `OPEN` one); through the status endpoint a claimant can only answer an information request on their own claim (`UNDER_REVIEW`, 403 for any other status); claimants can read only their own profile |
 
 The full endpoint-by-role table is in the README.
 
@@ -189,7 +196,7 @@ erDiagram
         string full_name
         string email
         boolean active
-        string country
+        string market
         string policy_number
         string specialization
         int max_capacity
@@ -198,11 +205,19 @@ erDiagram
         bigint id PK
         string claim_number UK
         bigint claimant_id
+        string claimant_name
+        string market
         string claim_type
         decimal claim_amount
         date incident_date
         string status
         bigint assigned_officer_id
+        string info_request_message
+        string info_requested_by
+        datetime info_requested_at
+        string info_reply_message
+        string info_replied_by
+        datetime info_replied_at
     }
     CLAIM_HISTORY {
         bigint id PK
@@ -222,13 +237,23 @@ erDiagram
 `USERS` lives in user-service's database; `CLAIMS` and `CLAIM_HISTORY` in claim-service's. Only the last relationship
 is a real foreign key.
 
-* **One `users` table for all roles.** The role decides which profile columns apply: claimants use `country` and
+* **One `users` table for all roles.** The role decides which profile columns apply: claimants use `market` and
   `policy_number`; officers use `specialization` and `max_capacity`. Create and update enforce the mandatory fields per
   role.
+* **Markets and claimant names.** `Market` (`SG`, `HK`, `JP`, `TH`, `IN`, `ID`) is an enum in `common`, stored by name.
+  `POST /api/claims` requires `claimantName` and `market` in the body. `ClaimService.create` compares them with the
+  claimant's `UserSummary`, already fetched through Feign (`fullName` ignoring case and spaces, `market` exactly), and
+  answers 409 on a mismatch, so a claimant cannot file into another market. The claim then stores the profile's name and
+  market (`claimant_name`, `market`) as snapshots taken at filing time. These columns are nullable in the database
+  (`ddl-auto=update` cannot add `NOT NULL` to a table that already has rows) and non-null is enforced in code: a claimant
+  without a market also gets 409 when filing. `GET /api/claims` filters by `market` and `claimType`.
 * **Claim numbers** have the form `CLM-<year>-<id padded to 6>` (for example `CLM-2026-000042`). The row is first saved
   with a temporary number, then renamed once the generated id exists, in the same transaction.
 * **`claim_history` is append-only.** Its columns are `updatable = false`. One row is written for every creation,
-  assignment, reassignment and status change, recording who (`changed_by` = username), when, and from → to.
+  assignment, reassignment and status change, recording who (`changed_by` = username), when, and from → to. The history
+  endpoint also returns each entry's `claimId`, `claimantName` and `market`, read from the entry's claim, which the
+  history query loads with an entity graph (the `claim` association is lazy and there is no open session at
+  serialisation time).
 
 ### 6.2 Persistence setup
 
@@ -238,7 +263,7 @@ is a real foreign key.
 | Override | – | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (defaults `root` / `root`) |
 | H2 console | enabled on 8081 and 8083 at `/h2-console` | disabled |
 | Schema | `spring.jpa.hibernate.ddl-auto=update`, generated from the entities | same |
-| Seed data | `DemoDataSeeder` in user-service when the users table is empty (`chubb.seed-demo-users`) | same |
+| Seed data | `DemoDataSeeder` in user-service when the users table is empty (`chubb.seed-demo-users`); `DemoClaimSeeder` in claim-service when the claims table is empty (`chubb.seed-demo-claims`) | same |
 
 Entities stay portable between H2-in-MySQL-mode and MySQL: no vendor-specific types or queries. `workload-service` has
 no database at all.
@@ -247,36 +272,40 @@ no database at all.
 
 The only legal moves are defined once, in `ClaimStatus.canTransitionTo`.
 
-```mermaid
-stateDiagram-v2
-    [*] --> OPEN: claim submitted
-    OPEN --> ASSIGNED: assigned by manager or picked up by officer
-    OPEN --> CLOSED
-    ASSIGNED --> UNDER_REVIEW
-    ASSIGNED --> CLOSED
-    UNDER_REVIEW --> APPROVED
-    UNDER_REVIEW --> REJECTED: remarks required
-    APPROVED --> SETTLED
-    REJECTED --> CLOSED
-    SETTLED --> CLOSED
-    CLOSED --> [*]
-```
+![Claim status flow: OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, SETTLED, CLOSED; asking for more information puts a claim ON_HOLD until the claimant replies; a rejected claim is closed; a claim can be closed early](docs/claim-status-flow.svg)
+
+The picture (`docs/claim-status-flow.svg`, with a 2x export in `docs/claim-status-flow.png`) shows who makes each move.
 
 Rules enforced in `ClaimService`:
 
 * **Submit.** A claimant files for themselves (id taken from their token). Officers and managers must give a `claimantId`,
   which must belong to a `CLAIMANT`. New claims start `OPEN`.
-* **Assign / reassign** (manager only). Allowed while the claim is `OPEN`, `ASSIGNED` or `UNDER_REVIEW`. The target must
+* **Assign / reassign** (manager only). Allowed while the claim is `OPEN`, `ASSIGNED`, `UNDER_REVIEW` or `ON_HOLD`. The target must
   be an **active `OFFICER`** user, not already the assignee, with `open claims < maxCapacity`. Status moves `OPEN →
   ASSIGNED`; reassigning keeps the current status.
 * **Status change** (officer or manager). `ASSIGNED` cannot be set through the status endpoint, only by assignment. Officers
   may update a claim assigned to them, or pick up an unassigned `OPEN` claim (self-assigns, capacity-checked, writes an
   `ASSIGNED` history row first). A claim assigned to a different officer returns 403 "Claim is not assigned to
-  you". Managers may update any claim. `REJECTED` requires `remarks`.
+  you". Managers may update any claim. `REJECTED` and `ON_HOLD` require `remarks`.
+* **Request more information** (officer on their own claim, or manager). Moving a claim from `UNDER_REVIEW` to
+  `ON_HOLD` through the status endpoint stores the remarks as the request (`info_request_message`, `info_requested_by`,
+  `info_requested_at`) and writes an `INFO_REQUESTED` history row. The claim JSON shows it as `infoRequest` while it is open.
+* **Provide information** (the owning claimant only, through the same `PATCH /api/claims/{id}/status`: status
+  `UNDER_REVIEW`, the reply as `remarks`). `ClaimService.updateStatus` sends a claimant to its own branch before any officer
+  logic, so there is no pick-up or capacity check. Checks in order: claim exists (404), it is their own claim (403), the
+  target is `UNDER_REVIEW` (403 for any other status), the claim is `ON_HOLD` (409 otherwise), remarks are not blank
+  (409). It then stores the reply (`info_reply_message`, `info_replied_by`, `info_replied_at`, shown as `lastReply`), writes an
+  `INFO_PROVIDED` history row and moves the claim back to `UNDER_REVIEW` in the same transaction, so no staff step is needed
+  to resume review.
+* **On hold while information is required.** A claim in `ON_HOLD` does not move until the claimant answers. In the
+  staff path of `ClaimService.updateStatus`, any target other than `CLOSED` is refused with 409 "Claim is on hold", checked
+  before the transition and remarks rules, so an officer or manager cannot resume, approve, reject or settle it. `ClaimStatus`
+  still lists `ON_HOLD` to `UNDER_REVIEW` as a legal move, because the claimant's reply uses it; who may make the
+  move is the service rule above. Staff can still close the claim (a claimant who never replies) and a manager can reassign it.
 * **Illegal moves** return 409 listing the allowed next statuses.
 
-"In progress" (`ClaimStatus.IN_PROGRESS` = `ASSIGNED` + `UNDER_REVIEW`) is the single definition of "open" used for both
-the capacity check and the workload numbers.
+"In progress" (`ClaimStatus.IN_PROGRESS` = `ASSIGNED` + `UNDER_REVIEW` + `ON_HOLD`) is the single definition of "open"
+used for both the capacity check and the workload numbers: an officer still owns a claim that has asked the claimant for more information.
 
 ## 8. Workload calculation
 
@@ -343,6 +372,7 @@ body: `status`, `error`, `message` only, with a hint to log in again.
 | `services.claim.url` | `SERVICES_CLAIM_URL` | `http://localhost:8083` | gateway, workload |
 | `services.workload.url` | `SERVICES_WORKLOAD_URL` | `http://localhost:8084` | gateway |
 | `chubb.seed-demo-users` | – | `true` | user-service |
+| `chubb.seed-demo-claims` | – | `true` | claim-service (uses the demo user ids, so keep it in step with `seed-demo-users`) |
 | `spring.profiles.active` | – | none (H2) | user, claim: `mysql` |
 | `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | same | per-service MySQL URL, `root` / `root` | user, claim, `mysql` profile only |
 
@@ -373,12 +403,12 @@ JUnit 5, Mockito and AssertJ; run with the build.
 
 | Module | Tests |
 |--------|-------|
-| `claim-service` | `ClaimStatusTest` (state machine), `ClaimServiceTest` (rules, Mockito), `ClaimRepositoryTest` (JPA on H2) |
+| `claim-service` | `ClaimStatusTest` (state machine), `ClaimServiceTest` (rules, Mockito), `ClaimRepositoryTest` (JPA on H2), `ClaimControllerTest` (`@WebMvcTest`: who may call what, validation, response shape), `StatusUpdateResponseTest` (the status response repeats every claim field), `DemoClaimSeederTest` (demo data respects the workflow and officer capacity) |
 | `user-service` | `UserServiceTest`, `AuthServiceTest`, `UserRepositoryTest`, `UserControllerTest` (controller security and validation), `AuthFlowIntegrationTest` (real login, real token, real filter chain) |
 | `workload-service` | `WorkloadServiceTest` |
 | `common`, `api-gateway` | none |
 
-`claim-service` and `workload-service` have no controller-level tests.
+`workload-service` has no controller-level tests.
 
 ## 13. Design decisions and trade-offs
 
@@ -404,7 +434,8 @@ Fine for a local demo; address before production.
   outside local use (the `mysql` profile turns the console off, but the path stays permitted).
 * No token revocation, refresh tokens or self-service password change.
 * The gateway has no rate limiting or CORS configuration.
-* Demo credentials are seeded on first start; set `chubb.seed-demo-users=false` in production.
+* Demo credentials are seeded on first start; set `chubb.seed-demo-users=false` and `chubb.seed-demo-claims=false` in
+  production (the demo claims reference the demo user ids).
 
 ### 14.2 Data and consistency
 
@@ -422,6 +453,79 @@ Fine for a local demo; address before production.
   UPDATE users SET role = 'OFFICER' WHERE role = 'STAFF';
   -- claim_db
   ALTER TABLE claims CHANGE assigned_staff_id assigned_officer_id BIGINT;
+  ```
+
+  The same applies to the *country → market* change. Start the new build once so Hibernate adds the nullable
+  `market` columns, then backfill and drop the old column (the two databases are separate, so the `claims` backfill is
+  done per claimant id, using each claimant's `market` from `user_db`; claims with no market cannot be filtered by it):
+
+  ```sql
+  -- user_db
+  UPDATE users SET market = CASE country
+      WHEN 'Singapore' THEN 'SG' WHEN 'Hong Kong' THEN 'HK' WHEN 'Japan' THEN 'JP'
+      WHEN 'Thailand' THEN 'TH' WHEN 'India' THEN 'IN' WHEN 'Indonesia' THEN 'ID' END
+  WHERE role = 'CLAIMANT';
+  ALTER TABLE users DROP COLUMN country;
+  -- claim_db, repeated for each claimant (ids and markets read from user_db)
+  UPDATE claims SET market = 'SG', claimant_name = 'Wei Lim' WHERE claimant_id IN (2);
+  ```
+
+  Hibernate also adds the nullable `claims.claimant_name` column, so the same per-claimant `UPDATE` sets the name; claims
+  without one show `claimantName: null` until then.
+
+  **Enum columns on MySQL.** Hibernate 6.5's MySQL dialect declares `@Enumerated(STRING)` columns as native
+  `enum('A','B',...)`, and `ddl-auto=update` never changes an existing column definition. The in-memory H2 default is
+  recreated on every start, so it is unaffected, but on an existing MySQL database any **new enum constant** is rejected
+  (`Data truncated`) until the column is altered. Run `SHOW CREATE TABLE <table>` first: if the column is an `enum(...)` the
+  `ALTER` statements below apply, and if it is a plain `varchar` they can be skipped. Adjust the column names if yours differ.
+
+  The market list is six markets: **India (`IN`) replaced Malaysia (`MY`)**. A database that ever held `MY` can no longer
+  load those rows (there is no `Market.MY`), so allow `IN` first, relabel, then tighten the column. Delete the rows instead
+  if they should not become India:
+
+  ```sql
+  -- user_db
+  ALTER TABLE users MODIFY market ENUM('SG','HK','JP','TH','MY','IN','ID');
+  UPDATE users SET market = 'IN' WHERE market = 'MY';
+  ALTER TABLE users MODIFY market ENUM('SG','HK','JP','TH','IN','ID');
+  -- claim_db
+  ALTER TABLE claims MODIFY market ENUM('SG','HK','JP','TH','MY','IN','ID');
+  UPDATE claims SET market = 'IN' WHERE market = 'MY';
+  ALTER TABLE claims MODIFY market ENUM('SG','HK','JP','TH','IN','ID');
+  ```
+
+  The **`ON_HOLD` status** and the **`INFO_REQUESTED` / `INFO_PROVIDED` history actions** are new enum constants too.
+  Start the new build once (Hibernate adds the six nullable `info_*` columns on `claims`), and before anyone uses the
+  feature run:
+
+  ```sql
+  -- claim_db
+  ALTER TABLE claims MODIFY status
+      ENUM('OPEN','ASSIGNED','UNDER_REVIEW','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NOT NULL;
+  ALTER TABLE claim_history MODIFY from_status
+      ENUM('OPEN','ASSIGNED','UNDER_REVIEW','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NULL;
+  ALTER TABLE claim_history MODIFY to_status
+      ENUM('OPEN','ASSIGNED','UNDER_REVIEW','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NOT NULL;
+  ALTER TABLE claim_history MODIFY action
+      ENUM('CREATED','ASSIGNED','REASSIGNED','STATUS_CHANGED','INFO_REQUESTED','INFO_PROVIDED') NOT NULL;
+  ```
+
+  The status was first called **`AWAITING_INFO`**, then **`MORE_INFO_REQUIRED`**, and is now **`ON_HOLD`**. If a database
+  already ran an earlier build (the statements above are then partly applied, and rows may hold either old name), allow
+  all three names, relabel the rows, then tighten the column. This is an untested sketch like the other notes here, so check
+  `SHOW CREATE TABLE` first. A database that never saw an old name only needs the statements above.
+
+  ```sql
+  -- claim_db
+  ALTER TABLE claims MODIFY status ENUM('OPEN','ASSIGNED','UNDER_REVIEW','AWAITING_INFO','MORE_INFO_REQUIRED','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NOT NULL;
+  ALTER TABLE claim_history MODIFY from_status ENUM('OPEN','ASSIGNED','UNDER_REVIEW','AWAITING_INFO','MORE_INFO_REQUIRED','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NULL;
+  ALTER TABLE claim_history MODIFY to_status ENUM('OPEN','ASSIGNED','UNDER_REVIEW','AWAITING_INFO','MORE_INFO_REQUIRED','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NOT NULL;
+  UPDATE claims SET status = 'ON_HOLD' WHERE status IN ('AWAITING_INFO','MORE_INFO_REQUIRED');
+  UPDATE claim_history SET from_status = 'ON_HOLD' WHERE from_status IN ('AWAITING_INFO','MORE_INFO_REQUIRED');
+  UPDATE claim_history SET to_status = 'ON_HOLD' WHERE to_status IN ('AWAITING_INFO','MORE_INFO_REQUIRED');
+  ALTER TABLE claims MODIFY status ENUM('OPEN','ASSIGNED','UNDER_REVIEW','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NOT NULL;
+  ALTER TABLE claim_history MODIFY from_status ENUM('OPEN','ASSIGNED','UNDER_REVIEW','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NULL;
+  ALTER TABLE claim_history MODIFY to_status ENUM('OPEN','ASSIGNED','UNDER_REVIEW','ON_HOLD','APPROVED','REJECTED','SETTLED','CLOSED') NOT NULL;
   ```
 * **Shared `DB_URL`.** `user-service` and `claim-service` read the same variable names for the `mysql` profile. If you
   set `DB_URL` globally, both services point at the same database and database-per-service is lost; set it per

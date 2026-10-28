@@ -9,11 +9,13 @@ import com.chubb.claims.claim.entity.Claim;
 import com.chubb.claims.claim.entity.ClaimHistory;
 import com.chubb.claims.claim.entity.ClaimHistory.Action;
 import com.chubb.claims.claim.model.ClaimStatus;
+import com.chubb.claims.claim.model.ClaimType;
 import com.chubb.claims.claim.repository.ClaimHistoryRepository;
 import com.chubb.claims.claim.repository.ClaimRepository;
 import com.chubb.claims.claim.security.Caller;
 import com.chubb.claims.common.exception.BusinessRuleException;
 import com.chubb.claims.common.exception.ResourceNotFoundException;
+import com.chubb.claims.common.model.Market;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,9 +42,22 @@ public class ClaimService {
 
     @Transactional
     public Claim create(CreateClaimRequest request, Caller caller) {
-        Long claimantId = resolveClaimantId(request.claimantId(), caller);
-        Claim claim = claims.save(new Claim(claimantId, request.claimType(), request.description(),
-                request.claimAmount(), request.incidentDate()));
+        UserSummary claimant = resolveClaimant(request.claimantId(), caller);
+        if (claimant.market() == null) {
+            throw new BusinessRuleException("Claimant " + claimant.fullName()
+                    + " has no market; ask a manager to set one before filing a claim");
+        }
+        if (request.market() != claimant.market()) {
+            throw new BusinessRuleException("Market %s does not match the market of claimant %s (%s)"
+                    .formatted(request.market(), claimant.fullName(), claimant.market()));
+        }
+        if (!claimant.fullName().trim().equalsIgnoreCase(request.claimantName().trim())) {
+            throw new BusinessRuleException("Name '%s' does not match the name of claimant id %d"
+                    .formatted(request.claimantName(), claimant.id()));
+        }
+        // store the profile's spelling, not whatever casing or spacing was typed
+        Claim claim = claims.save(new Claim(claimant.id(), claimant.fullName(), claimant.market(),
+                request.claimType(), request.description(), request.claimAmount(), request.incidentDate()));
         claim.assignClaimNumber();
         record(claim, Action.CREATED, null, ClaimStatus.OPEN, caller, "Claim submitted");
         return claim;
@@ -54,11 +69,12 @@ public class ClaimService {
         return claim;
     }
 
-    public List<Claim> list(ClaimStatus status, Long claimantId, Long assignedOfficerId, Caller caller) {
+    public List<Claim> list(ClaimStatus status, Long claimantId, Long assignedOfficerId, Market market,
+                            ClaimType claimType, Caller caller) {
         if (caller.isClaimant()) {
-            return claims.search(status, ownClaimantId(caller), assignedOfficerId);
+            return claims.search(status, ownClaimantId(caller), assignedOfficerId, market, claimType);
         }
-        return claims.search(status, claimantId, assignedOfficerId);
+        return claims.search(status, claimantId, assignedOfficerId, market, claimType);
     }
 
     public List<ClaimHistory> getHistory(long id, Caller caller) {
@@ -100,8 +116,12 @@ public class ClaimService {
     }
 
     @Transactional
-    public Claim updateStatus(long id, UpdateStatusRequest request, Caller caller) {
+    public StatusChange updateStatus(long id, UpdateStatusRequest request, Caller caller) {
         Claim claim = find(id);
+        if (caller.isClaimant()) {
+            return answerInformationRequest(claim, request, caller);
+        }
+        ClaimStatus before = claim.getStatus();   // read first: an officer's pick-up below can move OPEN to ASSIGNED
         if (!caller.isManager()) {
             claimForOfficer(claim, caller);
         }
@@ -111,6 +131,10 @@ public class ClaimService {
         if (target == ClaimStatus.ASSIGNED) {
             throw new BusinessRuleException("Use the assignment endpoint to assign a claim to an officer");
         }
+        if (current == ClaimStatus.ON_HOLD && target != ClaimStatus.CLOSED) {
+            throw new BusinessRuleException("Claim is on hold: waiting for the claimant to provide the requested "
+                    + "information. It continues when they submit it; staff can only close it");
+        }
         if (!current.canTransitionTo(target)) {
             throw new BusinessRuleException("Cannot move claim from %s to %s. Allowed next statuses: %s"
                     .formatted(current, target, current.allowedTransitions()));
@@ -119,9 +143,50 @@ public class ClaimService {
             throw new BusinessRuleException("Remarks are mandatory when rejecting a claim");
         }
 
-        claim.changeStatus(target);
-        record(claim, Action.STATUS_CHANGED, current, target, caller, request.remarks());
-        return claims.save(claim);
+        if (target == ClaimStatus.ON_HOLD && !StringUtils.hasText(request.remarks())) {
+            throw new BusinessRuleException("Remarks are mandatory when requesting information: say what the "
+                    + "claimant must provide");
+        }
+
+        boolean requestingInfo = target == ClaimStatus.ON_HOLD;
+        if (requestingInfo) {
+            claim.requestInformation(request.remarks(), caller.username());
+        } else {
+            claim.changeStatus(target);
+        }
+        ClaimHistory entry = record(claim, requestingInfo ? Action.INFO_REQUESTED : Action.STATUS_CHANGED, current,
+                target, caller, request.remarks());
+        return new StatusChange(claims.save(claim), before, entry);
+    }
+
+    /**
+     * The only status change a claimant may make: answering an information request on their own claim. They send
+     * {@code UNDER_REVIEW} with the reply as remarks and the claim goes straight back under review.
+     */
+    private StatusChange answerInformationRequest(Claim claim, UpdateStatusRequest request, Caller caller) {
+        assertCanView(claim, caller);
+
+        ClaimStatus current = claim.getStatus();
+        ClaimStatus resumed = ClaimStatus.UNDER_REVIEW;
+        if (request.status() != resumed) {
+            throw new AccessDeniedException("Claimants can only answer an information request (status "
+                    + resumed + ")");
+        }
+        if (current != ClaimStatus.ON_HOLD) {
+            throw new BusinessRuleException("No information has been requested for this claim (its status is %s)"
+                    .formatted(current));
+        }
+        if (!current.canTransitionTo(resumed)) {   // keeps ClaimStatus the one definition of the workflow
+            throw new BusinessRuleException("Cannot move claim from %s to %s".formatted(current, resumed));
+        }
+        if (!StringUtils.hasText(request.remarks())) {
+            throw new BusinessRuleException("Remarks are mandatory when answering an information request: write "
+                    + "what you are providing");
+        }
+
+        claim.receiveInformation(request.remarks(), caller.username());
+        ClaimHistory entry = record(claim, Action.INFO_PROVIDED, current, resumed, caller, request.remarks());
+        return new StatusChange(claims.save(claim), current, entry);
     }
 
     /** officerId -> open (assigned / under review) claim count; consumed by the workload service. */
@@ -133,9 +198,9 @@ public class ClaimService {
         return claims.findById(id).orElseThrow(() -> new ResourceNotFoundException("Claim", id));
     }
 
-    private Long resolveClaimantId(Long requestedId, Caller caller) {
+    private UserSummary resolveClaimant(Long requestedId, Caller caller) {
         if (caller.isClaimant()) {
-            return ownClaimantId(caller);
+            return userClient.getByUsername(caller.username());
         }
         if (requestedId == null) {
             throw new BusinessRuleException("claimantId is required when filing a claim on behalf of a claimant");
@@ -144,7 +209,7 @@ public class ClaimService {
         if (!CLAIMANT_ROLE.equals(claimant.role())) {
             throw new BusinessRuleException("User " + claimant.fullName() + " is not a claimant");
         }
-        return claimant.id();
+        return claimant;
     }
 
     private Long ownClaimantId(Caller caller) {
@@ -183,8 +248,10 @@ public class ClaimService {
                 "Picked up by " + me.fullName() + " (officer id " + me.id() + ")");
     }
 
-    private void record(Claim claim, Action action, ClaimStatus from, ClaimStatus to, Caller caller,
-                        String remarks) {
-        history.save(new ClaimHistory(claim, action, from, to, caller.username(), remarks));
+    private ClaimHistory record(Claim claim, Action action, ClaimStatus from, ClaimStatus to, Caller caller,
+                                String remarks) {
+        ClaimHistory entry = new ClaimHistory(claim, action, from, to, caller.username(), remarks);
+        history.save(entry);   // persist() stamps changedAt on this same instance
+        return entry;
     }
 }

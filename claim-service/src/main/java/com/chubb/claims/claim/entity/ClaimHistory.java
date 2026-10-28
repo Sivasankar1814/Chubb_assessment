@@ -2,7 +2,9 @@ package com.chubb.claims.claim.entity;
 
 import com.chubb.claims.claim.model.ClaimStatus;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.chubb.claims.common.model.Market;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,13 +19,18 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
-/** Immutable audit entry; one row per creation, assignment or status change. */
+/**
+ * Immutable audit entry; one row per creation, assignment or status change. Its JSON also shows the claim it belongs to
+ * (id, claimant name, market) so a history reads on its own.
+ */
+@JsonPropertyOrder({"id", "claimId", "claimantName", "market", "action", "fromStatus", "toStatus", "changedBy",
+        "remarks", "changedAt"})
 @Entity
 @Table(name = "claim_history")
 public class ClaimHistory {
 
     public enum Action {
-        CREATED, ASSIGNED, REASSIGNED, STATUS_CHANGED
+        CREATED, ASSIGNED, REASSIGNED, STATUS_CHANGED, INFO_REQUESTED, INFO_PROVIDED
     }
 
     @Id
@@ -83,6 +90,17 @@ public class ClaimHistory {
     @JsonProperty("claimId")
     public Long getClaimId() {
         return claim.getId();
+    }
+
+    /** Needs the claim to be loaded: see {@code ClaimHistoryRepository}. */
+    @JsonProperty("claimantName")
+    public String getClaimantName() {
+        return claim.getClaimantName();
+    }
+
+    @JsonProperty("market")
+    public Market getMarket() {
+        return claim.getMarket();
     }
 
     public Action getAction() {

@@ -16,6 +16,11 @@ spring:
     console:
       enabled: true
 
+# Seed 14 demo claims (all six markets) when the claims table is empty. They use the demo user ids from user-service,
+# so set this to false wherever chubb.seed-demo-users is false.
+chubb:
+  seed-demo-claims: true
+
 management:
   endpoints:
     web:

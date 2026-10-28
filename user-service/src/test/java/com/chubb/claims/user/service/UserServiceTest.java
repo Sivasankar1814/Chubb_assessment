@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.chubb.claims.common.exception.BusinessRuleException;
 import com.chubb.claims.common.exception.ResourceNotFoundException;
+import com.chubb.claims.common.model.Market;
 import com.chubb.claims.user.dto.CreateUserRequest;
 import com.chubb.claims.user.dto.UpdateUserRequest;
 import com.chubb.claims.user.entity.Role;
@@ -39,7 +40,7 @@ class UserServiceTest {
 
     private CreateUserRequest claimant() {
         return new CreateUserRequest("jdoe", "secret1", Role.CLAIMANT, "John Doe", "john@example.com",
-                "+65-91234567", null, "Singapore", "POL-1", null, null);
+                "+65-91234567", null, Market.SG, "POL-1", null, null);
     }
 
     private CreateUserRequest officer() {
@@ -64,7 +65,7 @@ class UserServiceTest {
         assertThat(created.isActive()).isTrue();
         assertThat(created.getSpecialization()).isEqualTo("PROPERTY");
         assertThat(created.getMaxCapacity()).isEqualTo(6);
-        assertThat(created.getCountry()).isNull();
+        assertThat(created.getMarket()).isNull();
         assertThat(created.getPasswordHash()).isNotEqualTo("secret1");
         assertThat(encoder.matches("secret1", created.getPasswordHash())).isTrue();
     }
@@ -78,6 +79,7 @@ class UserServiceTest {
 
         assertThat(created.getRole()).isEqualTo(Role.CLAIMANT);
         assertThat(created.getPolicyNumber()).isEqualTo("POL-1");
+        assertThat(created.getMarket()).isEqualTo(Market.SG);
     }
 
     @Test
@@ -97,13 +99,17 @@ class UserServiceTest {
     @Test
     void roleSpecificFieldsAreMandatory() {
         CreateUserRequest claimantWithoutPolicy = new CreateUserRequest("c", "secret1", Role.CLAIMANT, "C",
-                "c@example.com", null, null, "Japan", null, null, null);
+                "c@example.com", null, null, Market.JP, null, null, null);
+        CreateUserRequest claimantWithoutMarket = new CreateUserRequest("m", "secret1", Role.CLAIMANT, "M",
+                "m@example.com", null, null, null, "POL-2", null, null);
         CreateUserRequest officerWithoutCapacity = new CreateUserRequest("s", "secret1", Role.OFFICER, "S",
                 "s@example.com", null, null, null, null, "MOTOR", null);
         when(repository.findByUsername(any())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service().create(claimantWithoutPolicy, true))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("policyNumber");
+        assertThatThrownBy(() -> service().create(claimantWithoutMarket, true))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("market");
         assertThatThrownBy(() -> service().create(officerWithoutCapacity, true))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("maxCapacity");
     }

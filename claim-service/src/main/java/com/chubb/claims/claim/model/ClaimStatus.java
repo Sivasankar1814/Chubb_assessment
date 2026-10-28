@@ -7,17 +7,21 @@ import java.util.Set;
 
 /** Claim lifecycle. {@link #canTransitionTo} encodes the only legal moves between states. */
 public enum ClaimStatus {
-    OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, REJECTED, SETTLED, CLOSED;
+    OPEN, ASSIGNED, UNDER_REVIEW, ON_HOLD, APPROVED, REJECTED, SETTLED, CLOSED;
 
-    /** Statuses in which a claim counts towards an officer's workload. */
-    public static final Set<ClaimStatus> IN_PROGRESS = EnumSet.of(ASSIGNED, UNDER_REVIEW);
+    /**
+     * Statuses in which a claim counts towards an officer's workload. A claim waiting for the claimant still counts:
+     * the officer owns it and gets it back as soon as the claimant replies.
+     */
+    public static final Set<ClaimStatus> IN_PROGRESS = EnumSet.of(ASSIGNED, UNDER_REVIEW, ON_HOLD);
 
     private static final Map<ClaimStatus, Set<ClaimStatus>> TRANSITIONS = new EnumMap<>(ClaimStatus.class);
 
     static {
         TRANSITIONS.put(OPEN, Set.of(ASSIGNED, CLOSED));
         TRANSITIONS.put(ASSIGNED, Set.of(UNDER_REVIEW, CLOSED));
-        TRANSITIONS.put(UNDER_REVIEW, Set.of(APPROVED, REJECTED));
+        TRANSITIONS.put(UNDER_REVIEW, Set.of(APPROVED, REJECTED, ON_HOLD));
+        TRANSITIONS.put(ON_HOLD, Set.of(UNDER_REVIEW, CLOSED));
         TRANSITIONS.put(APPROVED, Set.of(SETTLED));
         TRANSITIONS.put(REJECTED, Set.of(CLOSED));
         TRANSITIONS.put(SETTLED, Set.of(CLOSED));
