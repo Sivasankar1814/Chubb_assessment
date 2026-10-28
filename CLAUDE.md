@@ -5,7 +5,8 @@ Guidance for Claude Code (and other contributors) working in this repository.
 ## Project
 
 Chubb APAC Backend Claim Management – Java 21, Spring Boot 3.3.5, Spring Cloud 2023.0.3, Maven multi-module.
-See `README.md` for architecture, users, API walkthrough and run instructions.
+See `README.md` for setup, configuration, demo users, the API walkthrough and run instructions, and `architecture.md` for
+the architecture, security model, data design and business rules.
 
 ## Modules and ports
 
@@ -133,13 +134,13 @@ Needs JDK 21 (`JAVA_HOME`). `scripts/start-all.ps1` builds and launches everythi
   resumes review, and then the officer or manager processes it. Keep that check ahead of the transition and remarks
   checks; `ClaimStatus` still allows `ON_HOLD` to `UNDER_REVIEW` because the claimant's reply uses it. The status was
   renamed twice (`AWAITING_INFO`, then `MORE_INFO_REQUIRED`): the old names are gone everywhere except the MySQL rename
-  note in `architecture.md` 14.2 and the guard in `ClaimStatusTest`.
+  note in `architecture.md` 12.2 and the guard in `ClaimStatusTest`.
 * **Workload** = claims in `ASSIGNED`/`UNDER_REVIEW`/`ON_HOLD` (the officer still owns a claim that waits for the
   claimant). Defined once in `ClaimStatus.IN_PROGRESS` and used by the repository count queries and the `assign` rule.
 * **New enum constants need a MySQL `ALTER`.** Hibernate 6.5's MySQL dialect declares `@Enumerated(STRING)` columns as native
   `enum(...)`, and `ddl-auto=update` never extends an existing one. Adding a `ClaimStatus`, `Action`, `Market`... value works
   on H2 (recreated each start) but fails on an existing MySQL database until the column is altered: add the ALTER to
-  `architecture.md` section 14.2 in the same change.
+  `architecture.md` section 12.2 in the same change.
 * DTOs are Java `record`s with Jakarta Validation annotations; entities are JPA `@Entity` classes (private fields, getters, no setters; state changes go through intention-revealing methods such as `Claim.assignTo`) in each service's `entity` package. Cross-service references (`claimantId`, `assignedOfficerId`) are plain columns, never joins.
   New endpoints need a Swagger `@Operation(summary = ..)`.
 
@@ -158,11 +159,11 @@ Needs JDK 21 (`JAVA_HOME`). `scripts/start-all.ps1` builds and launches everythi
 * For multi-file or behaviour-changing work, plan first (plan mode), update this file, then implement.
 * Keep CLAUDE.md in sync in the same change: stale facts here mislead the next session.
 * Three pictures live in `docs/`, each a hand-written SVG (no script or style blocks, its own dark background so it reads the
-  same in light and dark viewers) with a 2x PNG export beside it, embedded in `README.md` and `architecture.md`:
+  same in light and dark viewers) with a 2x PNG export beside it, each embedded in exactly one document:
   `claim-status-flow.svg` (statuses and who makes each move, `architecture.md` section 7), `system-architecture.svg`
   (gateway routes, Feign calls between services, who owns a database, `architecture.md` section 2) and `tech-stack.svg`
-  (the top banner: dependencies and versions, plus the counts of services, statuses, roles and markets). They are the only
-  copies of those diagrams in the README. When a status, transition, route, port, service call, dependency or version
+  (the top banner of `README.md`: dependencies and versions, plus the counts of services, statuses, roles and markets). Do
+  not embed a picture in a second document. When a status, transition, route, port, service call, dependency or version
   changes, or one of those counts does, update the SVG, then re-export the PNG with `msedge --headless=new --hide-scrollbars --force-device-scale-factor=2
   --window-size=<viewBox width>,<viewBox height> --screenshot=docs/<name>.png file:///<path>/docs/<name>.svg`, and look at
   the result.

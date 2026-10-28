@@ -1,12 +1,10 @@
 # Architecture – Chubb APAC Backend Claim Management
 
-How the system is put together and why. For setup, demo users and an API walkthrough see [README.md](README.md); for the
-rules to follow when changing code see [CLAUDE.md](CLAUDE.md).
+How the system is put together and why. For setup, configuration, demo users and an API walkthrough see
+[README.md](README.md); for the rules to follow when changing code see [CLAUDE.md](CLAUDE.md).
 
-![Technology stack: Java 21 and Maven; Spring Cloud Gateway, springdoc-openapi and Actuator at the edge; Spring Boot 3.3.5, OpenFeign, Bean Validation and a shared common library in the services; Spring Security with OAuth2 resource server, JWT and BCrypt; Spring Data JPA with H2 or MySQL; JUnit 5, Mockito and Spring Boot Test](docs/tech-stack.svg)
-
-The pictures are in `docs/` (SVG, each with a 2x PNG export). The remaining diagrams use
-[Mermaid](https://mermaid.js.org/), which GitHub renders inline.
+The pictures are in `docs/` (SVG, each with a 2x PNG export; the technology-stack banner is in the README). The remaining
+diagrams use [Mermaid](https://mermaid.js.org/), which GitHub renders inline.
 
 ## 1. Overview
 
@@ -74,24 +72,19 @@ workload-service ──► claim-service ──► user-service
 ```
 
 There are no cycles, so `user-service` can run on its own; `claim-service` needs `user-service`; `workload-service`
-needs both.
+needs both. Feign clients call lazily at fixed URLs, so a service still boots when its dependencies are down; calls to
+them fail with 502 until they are up.
 
-### Project layout
-
-```
-claims-management-system/
-├── pom.xml                 parent POM: versions, module list
-├── common/                 shared auto-configuration
-├── api-gateway/            application.yml holds the routes
-├── user-service/           controller / service / repository / entity / dto / config
-├── claim-service/          + client (Feign), model (enums, state machine), security (Caller)
-├── workload-service/       + client (Feign), model (OfficerWorkload)
-├── scripts/start-all.ps1   Windows build-and-launch script
-└── src/Main.java           IntelliJ template file; not part of any module
-```
+### Package structure
 
 Every service uses package-by-layer: `controller → service → repository → entity`, with `dto` records for request and
-response bodies. Controllers never touch repositories.
+response bodies. Controllers never touch repositories. The directory tree is in the README.
+
+* `user-service`: the layers above plus `config`.
+* `claim-service`: the layers plus `client` (Feign), `model` (enums, state machine) and `security` (`Caller`).
+* `workload-service`: `client` (Feign) and `model` (`OfficerWorkload`).
+* `api-gateway`: the routes are in `application.yml`.
+* `common`: shared auto-configuration only (section 9).
 
 ## 4. Request flow
 
@@ -106,9 +99,9 @@ The gateway matches on path prefix and forwards the request unchanged, including
 | `/api/workload/**` | workload-service |
 | `/docs/<service>/v3/api-docs` | that service's `/v3/api-docs` (prefix stripped, `Host` header preserved so the OpenAPI "server" URL shows the gateway) |
 
-Downstream base URLs come from `services.{user,claim,workload}.url` (env `SERVICES_USER_URL`, `SERVICES_CLAIM_URL`,
-`SERVICES_WORKLOAD_URL`), defaulting to `localhost:8081 / 8083 / 8084`. The Feign clients in `claim-service` and
-`workload-service` read the same `services.*.url` properties.
+Downstream base URLs come from the `services.{user,claim,workload}.url` settings (defaults and environment variables are
+under Configuration in the README). The Feign clients in `claim-service` and `workload-service` read the same
+`services.*.url` properties.
 
 ### 4.2 Example: a manager assigns a claim
 
@@ -250,7 +243,7 @@ is a real foreign key.
 * **Claim numbers** have the form `CLM-<year>-<id padded to 6>` (for example `CLM-2026-000042`). The row is first saved
   with a temporary number, then renamed once the generated id exists, in the same transaction.
 * **`claim_history` is append-only.** Its columns are `updatable = false`. One row is written for every creation,
-  assignment, reassignment and status change, recording who (`changed_by` = username), when, and from → to. The history
+  assignment, reassignment, status change, information request and reply, recording who (`changed_by` = username), when, and from → to. The history
   endpoint also returns each entry's `claimId`, `claimantName` and `market`, read from the entry's claim, which the
   history query loads with an entity graph (the `claim` association is lazy and there is no open session at
   serialisation time).
@@ -260,15 +253,13 @@ is a real foreign key.
 | | Default | `--spring.profiles.active=mysql` |
 |---|---------|----------------------------------|
 | Database | in-memory H2 in MySQL mode: `jdbc:h2:mem:userdb`, `jdbc:h2:mem:claimdb` | `user_db`, `claim_db` on `localhost:3306`, created on demand |
-| Override | – | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (defaults `root` / `root`) |
-| H2 console | enabled on 8081 and 8083 at `/h2-console` | disabled |
 | Schema | `spring.jpa.hibernate.ddl-auto=update`, generated from the entities | same |
 | Seed data | `DemoDataSeeder` in user-service when the users table is empty (`chubb.seed-demo-users`); `DemoClaimSeeder` in claim-service when the claims table is empty (`chubb.seed-demo-claims`) | same |
 
 Entities stay portable between H2-in-MySQL-mode and MySQL: no vendor-specific types or queries. `workload-service` has
-no database at all.
+no database at all. Connection overrides and the H2 console are covered in the README (Run and Configuration).
 
-## 7. Claim lifecycle
+## 7. Claim lifecycle and business rules
 
 The only legal moves are defined once, in `ClaimStatus.canTransitionTo`.
 
@@ -279,7 +270,8 @@ The picture (`docs/claim-status-flow.svg`, with a 2x export in `docs/claim-statu
 Rules enforced in `ClaimService`:
 
 * **Submit.** A claimant files for themselves (id taken from their token). Officers and managers must give a `claimantId`,
-  which must belong to a `CLAIMANT`. New claims start `OPEN`.
+  which must belong to a `CLAIMANT`. New claims start `OPEN`. `claimantName` and `market` are required in the body and must
+  match the claimant's profile (section 6.1); a mismatch is 409.
 * **Assign / reassign** (manager only). Allowed while the claim is `OPEN`, `ASSIGNED`, `UNDER_REVIEW` or `ON_HOLD`. The target must
   be an **active `OFFICER`** user, not already the assignee, with `open claims < maxCapacity`. Status moves `OPEN →
   ASSIGNED`; reassigning keeps the current status.
@@ -289,12 +281,14 @@ Rules enforced in `ClaimService`:
   you". Managers may update any claim. `REJECTED` and `ON_HOLD` require `remarks`.
 * **Request more information** (officer on their own claim, or manager). Moving a claim from `UNDER_REVIEW` to
   `ON_HOLD` through the status endpoint stores the remarks as the request (`info_request_message`, `info_requested_by`,
-  `info_requested_at`) and writes an `INFO_REQUESTED` history row. The claim JSON shows it as `infoRequest` while it is open.
+  `info_requested_at`) and writes an `INFO_REQUESTED` history row. The claim JSON shows it as `infoRequest` (`message`, `requestedBy`, `requestedAt`) while it is open, so the claimant sees
+  what to provide.
 * **Provide information** (the owning claimant only, through the same `PATCH /api/claims/{id}/status`: status
   `UNDER_REVIEW`, the reply as `remarks`). `ClaimService.updateStatus` sends a claimant to its own branch before any officer
   logic, so there is no pick-up or capacity check. Checks in order: claim exists (404), it is their own claim (403), the
   target is `UNDER_REVIEW` (403 for any other status), the claim is `ON_HOLD` (409 otherwise), remarks are not blank
-  (409). It then stores the reply (`info_reply_message`, `info_replied_by`, `info_replied_at`, shown as `lastReply`), writes an
+  (409; at most 500 characters). It then stores the reply (`info_reply_message`, `info_replied_by`, `info_replied_at`, shown
+  as `lastReply` with `message`, `repliedBy`, `repliedAt`), writes an
   `INFO_PROVIDED` history row and moves the claim back to `UNDER_REVIEW` in the same transaction, so no staff step is needed
   to resume review.
 * **On hold while information is required.** A claim in `ON_HOLD` does not move until the claimant answers. In the
@@ -303,6 +297,12 @@ Rules enforced in `ClaimService`:
   still lists `ON_HOLD` to `UNDER_REVIEW` as a legal move, because the claimant's reply uses it; who may make the
   move is the service rule above. Staff can still close the claim (a claimant who never replies) and a manager can reassign it.
 * **Illegal moves** return 409 listing the allowed next statuses.
+* **List and filter.** `GET /api/claims` returns every claim to officers and managers and only their own to a claimant.
+  The filters `market`, `claimType`, `status`, `claimantId` and `assignedOfficerId` are all optional and combinable; an
+  unknown market or type returns 400. Every claim shows `claimantName`, `market` and `claimantId`.
+* **Status update response.** `PATCH /api/claims/{id}/status` returns the updated claim with all its usual fields, plus
+  `previousStatus` (the status before the request) and the `remarks`, `changedBy` and `changedAt` of the change. When an
+  officer's update also picks up an `OPEN` claim, `previousStatus` is `OPEN` and the history lists the `ASSIGNED` step too.
 
 "In progress" (`ClaimStatus.IN_PROGRESS` = `ASSIGNED` + `UNDER_REVIEW` + `ON_HOLD`) is the single definition of "open"
 used for both the capacity check and the workload numbers: an officer still owns a claim that has asked the claimant for more information.
@@ -360,44 +360,7 @@ One JSON shape everywhere: `timestamp`, `status`, `error`, `message`, `path`, `d
 The 401 for a **missing or expired token** is written by the security filter before MVC is reached, so it has a slimmer
 body: `status`, `error`, `message` only, with a hint to log in again.
 
-## 10. Configuration reference
-
-| Setting | Env var | Default | Applies to |
-|---------|---------|---------|------------|
-| `server.port` | – | 8080 / 8081 / 8083 / 8084 | each service |
-| `chubb.security.jwt.secret` | `CHUBB_SECURITY_JWT_SECRET` | built-in demo value, min. 32 characters | user, claim, workload (**must be identical**) |
-| `chubb.security.jwt.issuer` | – | `chubb-claims-auth` | same three |
-| `chubb.security.jwt.expiration-minutes` | – | 120 | user-service (signs) |
-| `services.user.url` | `SERVICES_USER_URL` | `http://localhost:8081` | gateway, claim, workload |
-| `services.claim.url` | `SERVICES_CLAIM_URL` | `http://localhost:8083` | gateway, workload |
-| `services.workload.url` | `SERVICES_WORKLOAD_URL` | `http://localhost:8084` | gateway |
-| `chubb.seed-demo-users` | – | `true` | user-service |
-| `chubb.seed-demo-claims` | – | `true` | claim-service (uses the demo user ids, so keep it in step with `seed-demo-users`) |
-| `spring.profiles.active` | – | none (H2) | user, claim: `mysql` |
-| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | same | per-service MySQL URL, `root` / `root` | user, claim, `mysql` profile only |
-
-Actuator exposes only `health` and `info` on every service (`/actuator/health` on 8080, 8081, 8083, 8084).
-
-## 11. Build, run and operations
-
-* **Build:** `./mvnw clean install` (Maven wrapper; JDK 21 via `JAVA_HOME`). Module order is `common` first, then the
-  rest. Each service becomes a Spring Boot fat jar at `<module>/target/<module>-1.0.0.jar`.
-  After editing `common`, run `clean install`: the service jars are not repackaged when only a dependency changed.
-* **Run:** `scripts/start-all.ps1` builds, then starts the four jars in dependency order (user, claim, workload,
-  gateway), each in its own minimised window. Or run the jars by hand, or `./mvnw -pl <module> spring-boot:run`.
-* **Start order is a convenience, not a requirement.** Feign clients use fixed URLs and call lazily, so a service boots
-  even if its dependencies are down; calls to them fail with 502 until they are up. Log in only after `user-service` is
-  up.
-* **One set only.** Running jars lock their files and a double start leaves two sets of processes on the same ports:
-  stop with `Get-Process java | Stop-Process -Force` before rebuilding or restarting. Where `java` on `PATH` is the
-  Oracle launcher stub (`...\Common Files\Oracle\Java\javapath`), each service shows as two `java` processes (stub plus
-  JVM), so expect 8 for 4 services.
-* **Logs:** console output; when started hidden with redirected output, `%TEMP%\cms-logs\<service>.out.log` and
-  `.err.log`.
-* **API docs:** the gateway's Swagger UI at `http://localhost:8080/swagger-ui.html` aggregates the three services;
-  each service also serves its own at `/swagger-ui.html`.
-
-## 12. Testing
+## 10. Testing
 
 JUnit 5, Mockito and AssertJ; run with the build.
 
@@ -410,11 +373,11 @@ JUnit 5, Mockito and AssertJ; run with the build.
 
 `workload-service` has no controller-level tests.
 
-## 13. Design decisions and trade-offs
+## 11. Design decisions and trade-offs
 
 | Decision | Benefit | Cost |
 |----------|---------|------|
-| **Database per service**, soft references by id | Services can change and scale independently; no shared-schema coupling | No foreign keys across services; id lookups need a Feign call; see 14.2 |
+| **Database per service**, soft references by id | Services can change and scale independently; no shared-schema coupling | No foreign keys across services; id lookups need a Feign call; see 12.2 |
 | **One user service for all roles** | One login, one identity, one place for roles and capacity; claim and workload read officer data from the same source | The `users` table has role-specific nullable columns |
 | **Stateless JWT, validated locally** | No per-request call to the auth service; any service can authorise on its own | No revocation or refresh tokens; a token is valid until it expires; every service needs the same secret |
 | **Gateway routes but does not authenticate** | Gateway stays thin; each service stays safe even if reached directly | A bad request travels one hop before it is rejected; auth rules exist only in the services |
@@ -423,11 +386,11 @@ JUnit 5, Mockito and AssertJ; run with the build.
 | **Shared `common` library as auto-configuration** | One place for security, errors and OpenAPI; services add nothing to adopt it | Changes to `common` require rebuilding every service |
 | **Workload computed live** | Always consistent with the claims; nothing to keep in sync | Two synchronous calls per request; no caching |
 
-## 14. Known limitations
+## 12. Known limitations
 
 Fine for a local demo; address before production.
 
-### 14.1 Security
+### 12.1 Security
 
 * The default JWT secret is in the source. Set `CHUBB_SECURITY_JWT_SECRET` (same value in user, claim and workload).
 * `/h2-console/**` is on the public path list of every service and the H2 console is enabled by default. Disable both
@@ -437,7 +400,7 @@ Fine for a local demo; address before production.
 * Demo credentials are seeded on first start; set `chubb.seed-demo-users=false` and `chubb.seed-demo-claims=false` in
   production (the demo claims reference the demo user ids).
 
-### 14.2 Data and consistency
+### 12.2 Data and consistency
 
 * **Capacity check is not atomic.** `assign` and officer pick-up count open claims, then save, with no row lock or
   `@Version`. Two concurrent assignments to an officer one claim below capacity can both succeed and exceed it.
@@ -531,15 +494,17 @@ Fine for a local demo; address before production.
   set `DB_URL` globally, both services point at the same database and database-per-service is lost; set it per
   process.
 
-### 14.3 Resilience and operations
+### 12.3 Resilience and operations
 
 * No retries, circuit breakers or bulkheads, and no explicit Feign timeouts (Feign defaults apply). A slow `user-service`
   slows every service that calls it, and `workload-service` fails as a whole if either dependency fails.
 * No distributed tracing, metrics beyond actuator health/info, or centralised logging.
 * Each service is a single instance; the gateway has no load balancing.
 
-### 14.4 Where this is likely to grow
+### 12.4 Where this is likely to grow
 
+* Replace the lookup in `AuthService` in `user-service` with an identity-provider backed implementation (the users table
+  already stores hashed passwords and an active flag).
 * Replace fixed URLs with a registry or platform service discovery, and move the gateway route targets to `lb://`.
 * Replace the shared HS256 secret with an identity provider and asymmetric (RS256/JWKS) validation.
 * Add `@Version` (optimistic locking) on `Claim`, or a database-level capacity guard.
