@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 700" width="1040" height="700" role="img" aria-label="System architecture: a client talks only to the api-gateway on port 8080, which routes by path to user-service on 8081, claim-service on 8083 and workload-service on 8084. Services call each other directly through Feign: claim-service calls user-service, and workload-service calls both claim-service and user-service. user-service and claim-service each own a database; workload-service has none.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#14213d"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="ahTeal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.4" markerHeight="6.4" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2dd4bf"/>
+    </marker>
+  </defs>
+
+  <rect width="1040" height="700" rx="18" fill="url(#bg)"/>
+
+  <g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+
+    <!-- title -->
+    <text x="40" y="44" font-size="24" font-weight="700" fill="#f8fafc">System architecture</text>
+    <text x="40" y="68" font-size="13" fill="#cbd5e1">Clients talk only to the gateway. Services call each other directly through Feign, never back through the gateway.</text>
+
+    <!-- legend: the two arrow encodings -->
+    <line x1="690" y1="106" x2="734" y2="106" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/>
+    <text x="746" y="110" font-size="12" fill="#cbd5e1">routed by the gateway, by path</text>
+    <line x1="690" y1="136" x2="734" y2="136" stroke="#2dd4bf" stroke-width="2.5" marker-end="url(#ahTeal)"/>
+    <text x="746" y="140" font-size="12" fill="#cbd5e1">Feign call, service to service</text>
+
+    <!-- client to gateway -->
+    <line x1="270" y1="122" x2="420" y2="122" stroke="#94a3b8" stroke-width="2" marker-end="url(#ah)"/>
+    <text x="345" y="112" font-size="12" fill="#cbd5e1" text-anchor="middle">REST + Bearer JWT</text>
+
+    <!-- gateway to services (path routing) -->
+    <g stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#ah)">
+      <path d="M520 164 V232 H170 V300"/>
+      <path d="M520 164 V300"/>
+      <path d="M520 164 V232 H870 V300"/>
+    </g>
+    <circle cx="520" cy="232" r="3.5" fill="#94a3b8"/>
+    <g font-size="12" fill="#cbd5e1">
+      <text x="345" y="224" text-anchor="middle">/api/users/**, /api/auth/**</text>
+      <text x="534" y="272">/api/claims/**</text>
+      <text x="695" y="224" text-anchor="middle">/api/workload/**</text>
+    </g>
+
+    <!-- Feign calls between services -->
+    <g stroke="#2dd4bf" stroke-width="2.5" fill="none" marker-end="url(#ahTeal)">
+      <line x1="420" y1="342" x2="270" y2="342"/>
+      <line x1="770" y1="342" x2="620" y2="342"/>
+      <path d="M800 384 V590 H40 V342 H70"/>
+    </g>
+    <g font-size="12" fill="#5eead4" text-anchor="middle">
+      <text x="345" y="318">claimant and officer</text>
+      <text x="345" y="332">profile lookup</text>
+      <text x="695" y="318">open claims</text>
+      <text x="695" y="332">per officer</text>
+      <text x="430" y="582">active officers and their capacity</text>
+    </g>
+
+    <!-- databases: owned by one service each -->
+    <g stroke="#94a3b8" stroke-width="2">
+      <line x1="170" y1="384" x2="170" y2="434"/>
+      <line x1="520" y1="384" x2="520" y2="434"/>
+    </g>
+    <g font-size="12" fill="#cbd5e1">
+      <text x="182" y="414">owns</text>
+      <text x="532" y="414">owns</text>
+    </g>
+    <g fill="#1e293b" stroke="#64748b" stroke-width="2" filter="url(#shadow)">
+      <path d="M120 448 V500 A50 14 0 0 0 220 500 V448"/>
+      <path d="M470 448 V500 A50 14 0 0 0 570 500 V448"/>
+    </g>
+    <g fill="#2b3a52" stroke="#64748b" stroke-width="2">
+      <ellipse cx="170" cy="448" rx="50" ry="14"/>
+      <ellipse cx="520" cy="448" rx="50" ry="14"/>
+    </g>
+    <g text-anchor="middle" font-size="12" fill="#f8fafc">
+      <text x="170" y="480">userdb / user_db</text>
+      <text x="520" y="480">claimdb / claim_db</text>
+    </g>
+    <g text-anchor="middle" font-size="11" fill="#94a3b8">
+      <text x="170" y="496">H2 or MySQL</text>
+      <text x="520" y="496">H2 or MySQL</text>
+    </g>
+    <g font-size="12" fill="#94a3b8">
+      <text x="815" y="410">stateless, no database:</text>
+      <text x="815" y="425">computed live</text>
+    </g>
+
+    <!-- nodes -->
+    <g filter="url(#shadow)">
+      <rect x="70" y="90" width="200" height="64" rx="12" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+      <rect x="420" y="80" width="200" height="84" rx="12" fill="#12233f" stroke="#3b82f6" stroke-width="2"/>
+      <rect x="70" y="300" width="200" height="84" rx="12" fill="#0f2e22" stroke="#22c55e" stroke-width="2"/>
+      <rect x="420" y="300" width="200" height="84" rx="12" fill="#231a45" stroke="#8b5cf6" stroke-width="2"/>
+      <rect x="770" y="300" width="200" height="84" rx="12" fill="#3a1230" stroke="#ec4899" stroke-width="2"/>
+    </g>
+    <g text-anchor="middle" fill="#f8fafc" font-size="15" font-weight="700">
+      <text x="170" y="118">Client</text>
+      <text x="520" y="106">api-gateway :8080</text>
+      <text x="170" y="326">user-service :8081</text>
+      <text x="520" y="326">claim-service :8083</text>
+      <text x="870" y="326">workload-service :8084</text>
+    </g>
+    <g text-anchor="middle" fill="#94a3b8" font-size="11">
+      <text x="170" y="138">Swagger UI or any REST client</text>
+      <text x="520" y="126">Spring Cloud Gateway (WebFlux)</text>
+      <text x="520" y="141">routes by path, aggregates Swagger UI</text>
+      <text x="520" y="156">no auth, no business logic</text>
+      <text x="170" y="347">every user, role and capacity</text>
+      <text x="170" y="362">login and JWT signing</text>
+      <text x="520" y="347">claims, assignment, history</text>
+      <text x="520" y="362">status workflow</text>
+      <text x="870" y="347">utilisation per officer</text>
+      <text x="870" y="362">next-assignee suggestion</text>
+    </g>
+
+    <!-- footer -->
+    <g font-size="11" fill="#94a3b8">
+      <text x="40" y="640">Feign forwards the caller's Authorization header, so the caller's own role is enforced in every service.</text>
+      <text x="40" y="658">No cycles: user-service can run alone, claim-service needs user-service, workload-service needs both.</text>
+    </g>
+  </g>
+</svg>

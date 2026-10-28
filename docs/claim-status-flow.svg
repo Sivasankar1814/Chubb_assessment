@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 780" width="1040" height="780" role="img" aria-label="Claim status flow: a claim moves OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, SETTLED, CLOSED. An officer or manager asking for more information puts it ON_HOLD, where only the claimant's reply resumes review and staff can only close it. A rejected claim can be closed, and a claim can be closed early.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#14213d"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="9" flood-color="#f59e0b" flood-opacity="0.6"/>
+    </filter>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="ahAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.4" markerHeight="5.4" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
+    </marker>
+  </defs>
+
+  <rect width="1040" height="780" rx="18" fill="url(#bg)"/>
+
+  <g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
+
+    <!-- title -->
+    <text x="40" y="44" font-size="24" font-weight="700" fill="#f8fafc">Claim status flow</text>
+    <text x="40" y="68" font-size="13" fill="#cbd5e1">8 statuses. Asking for more information puts a claim ON_HOLD; only the claimant's reply resumes it.</text>
+
+    <!-- legend: only encodings that repeat -->
+    <line x1="40" y1="108" x2="84" y2="108" stroke="#f59e0b" stroke-width="3" marker-end="url(#ahAmber)"/>
+    <text x="96" y="112" font-size="12" fill="#cbd5e1">the hold: staff ask, then only the claimant resumes</text>
+    <line x1="40" y1="138" x2="84" y2="138" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+    <text x="96" y="142" font-size="12" fill="#cbd5e1">staff close a claim early or withdraw it</text>
+    <circle cx="62" cy="168" r="6" fill="#2dd4bf"/>
+    <text x="96" y="172" font-size="12" fill="#cbd5e1">counts toward the officer's workload</text>
+
+    <!-- transitions: main path -->
+    <g stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#ah)">
+      <line x1="520" y1="156" x2="520" y2="210"/>
+      <line x1="520" y1="266" x2="520" y2="320"/>
+      <line x1="520" y1="376" x2="520" y2="430"/>
+      <line x1="520" y1="486" x2="520" y2="540"/>
+      <line x1="520" y1="596" x2="520" y2="650"/>
+      <line x1="620" y1="348" x2="770" y2="348"/>
+    </g>
+    <g font-size="12" fill="#cbd5e1">
+      <text x="534" y="187">manager assigns, or officer picks up</text>
+      <text x="534" y="297">assigned officer or manager</text>
+      <text x="534" y="407">approve</text>
+      <text x="534" y="517">settle</text>
+      <text x="534" y="627">close</text>
+      <text x="695" y="340" text-anchor="middle">reject + remarks</text>
+    </g>
+
+    <!-- transitions: the hold -->
+    <g stroke="#f59e0b" stroke-width="3" fill="none" marker-end="url(#ahAmber)">
+      <line x1="420" y1="326" x2="270" y2="326"/>
+      <line x1="270" y1="372" x2="420" y2="372"/>
+    </g>
+    <g font-size="12" fill="#fbbf24" text-anchor="middle">
+      <text x="345" y="300">officer or manager</text>
+      <text x="345" y="315">asks + remarks</text>
+      <text x="345" y="392">only the claimant</text>
+      <text x="345" y="407">replies + remarks</text>
+    </g>
+
+    <!-- transitions into CLOSED -->
+    <g stroke="#94a3b8" stroke-width="2" fill="none">
+      <path d="M170 418 V678 H420" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+      <path d="M870 376 V678 H620" marker-end="url(#ah)"/>
+      <path d="M620 128 H990 V744 H520 V706" stroke-dasharray="6 5" marker-end="url(#ah)"/>
+      <path d="M620 238 H990" stroke-dasharray="6 5"/>
+    </g>
+    <circle cx="990" cy="238" r="3.5" fill="#94a3b8"/>
+    <g font-size="12" fill="#cbd5e1">
+      <text x="184" y="560">staff withdraw</text>
+      <text x="884" y="560">close</text>
+      <text x="805" y="120" text-anchor="middle">close early</text>
+      <text x="805" y="230" text-anchor="middle">close early</text>
+    </g>
+
+    <!-- statuses -->
+    <g filter="url(#shadow)">
+      <rect x="420" y="100" width="200" height="56" rx="12" fill="#12233f" stroke="#3b82f6" stroke-width="2"/>
+      <rect x="420" y="210" width="200" height="56" rx="12" fill="#12233f" stroke="#3b82f6" stroke-width="2"/>
+      <rect x="420" y="320" width="200" height="56" rx="12" fill="#231a45" stroke="#8b5cf6" stroke-width="2"/>
+      <rect x="420" y="430" width="200" height="56" rx="12" fill="#0f2e22" stroke="#22c55e" stroke-width="2"/>
+      <rect x="420" y="540" width="200" height="56" rx="12" fill="#0f2e22" stroke="#22c55e" stroke-width="2"/>
+      <rect x="420" y="650" width="200" height="56" rx="12" fill="#1e293b" stroke="#64748b" stroke-width="2"/>
+      <rect x="770" y="320" width="200" height="56" rx="12" fill="#3a1518" stroke="#ef4444" stroke-width="2"/>
+    </g>
+    <rect x="70" y="278" width="200" height="140" rx="14" fill="#3a2a07" stroke="#f59e0b" stroke-width="3" filter="url(#glow)"/>
+
+    <g text-anchor="middle" fill="#f8fafc" font-size="15" font-weight="700">
+      <text x="520" y="126">OPEN</text>
+      <text x="520" y="236">ASSIGNED</text>
+      <text x="520" y="346">UNDER_REVIEW</text>
+      <text x="520" y="456">APPROVED</text>
+      <text x="520" y="566">SETTLED</text>
+      <text x="520" y="676">CLOSED</text>
+      <text x="870" y="346">REJECTED</text>
+      <text x="170" y="306" font-size="17" fill="#fbbf24">ON_HOLD</text>
+    </g>
+    <g text-anchor="middle" fill="#94a3b8" font-size="11">
+      <text x="520" y="144">submitted, no officer yet</text>
+      <text x="520" y="254">the officer owns it</text>
+      <text x="520" y="364">being reviewed</text>
+      <text x="520" y="474">decision: approved</text>
+      <text x="520" y="584">payment made</text>
+      <text x="520" y="694">final, nothing moves</text>
+      <text x="870" y="364">decision: rejected</text>
+    </g>
+    <g text-anchor="middle" fill="#fde68a" font-size="12">
+      <text x="170" y="334">The flow stops here.</text>
+      <text x="170" y="352">Only the claimant's reply</text>
+      <text x="170" y="368">resumes review.</text>
+      <text x="170" y="392">Staff can only close it.</text>
+    </g>
+
+    <!-- workload markers -->
+    <g fill="#2dd4bf">
+      <circle cx="606" cy="226" r="6"/>
+      <circle cx="606" cy="336" r="6"/>
+      <circle cx="256" cy="294" r="6"/>
+    </g>
+
+    <!-- footer -->
+    <g font-size="11" fill="#94a3b8">
+      <text x="40" y="736">Legal moves are defined once, in ClaimStatus.</text>
+      <text x="40" y="754">Who may make each move is enforced in ClaimService.</text>
+    </g>
+  </g>
+</svg>
