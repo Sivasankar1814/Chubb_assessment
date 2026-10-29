@@ -1,0 +1,87 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Officer workload</h1>
+      <p class="subtitle">Open claims against capacity, least utilised first.</p>
+    </div>
+  </header>
+
+  @let current = state();
+  @if (current.state === 'loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Loading workload" />
+  } @else if (current.state === 'error') {
+    <section class="surface-card">
+      <app-state-message
+        kind="error"
+        title="Couldn't load the workload"
+        [message]="current.problem.message"
+        [retryable]="true"
+        (retry)="retry()"
+      />
+    </section>
+  } @else {
+    @if (totals(); as t) {
+      <section class="totals" aria-label="Team totals">
+        <div class="surface-card tile">
+          <span class="icon-badge"><mat-icon aria-hidden="true">groups</mat-icon></span>
+          <div>
+            <span class="label">Active officers</span>
+            <span class="value">{{ t.officers }}</span>
+          </div>
+        </div>
+        <div class="surface-card tile">
+          <span class="icon-badge" style="--badge-color: var(--app-info)"
+            ><mat-icon aria-hidden="true">folder_open</mat-icon></span
+          >
+          <div>
+            <span class="label">Open claims</span>
+            <span class="value">{{ t.open }}</span>
+          </div>
+        </div>
+        <div class="surface-card tile">
+          <span class="icon-badge" style="--badge-color: var(--app-good-text)"
+            ><mat-icon aria-hidden="true">speed</mat-icon></span
+          >
+          <div>
+            <span class="label">Capacity left</span>
+            <span class="value">{{ t.available }}</span>
+          </div>
+        </div>
+      </section>
+    }
+
+    @if (current.data.length === 0) {
+      <section class="surface-card">
+        <app-state-message
+          title="No active officers"
+          message="Claims cannot be assigned until an officer is active."
+        />
+      </section>
+    } @else {
+      <ul class="cards">
+        @for (officer of current.data; track officer.officerId) {
+          <li class="surface-card officer" [class.me]="officer.officerId === me()?.id">
+            <div class="head">
+              <app-avatar [name]="officer.fullName" />
+              <div>
+                <h2>
+                  {{ officer.fullName }}
+                  @if (officer.officerId === me()?.id) {
+                    <span class="you">You</span>
+                  }
+                </h2>
+                @if (officer.specialization) {
+                  <p class="muted">{{ officer.specialization }}</p>
+                }
+              </div>
+            </div>
+            <app-workload-meter [workload]="officer" />
+            <a matButton [routerLink]="['/claims']" [queryParams]="{ officer: officer.officerId }">
+              View claims<mat-icon iconPositionEnd>arrow_forward</mat-icon>
+            </a>
+          </li>
+        }
+      </ul>
+    }
+  }
+</div>

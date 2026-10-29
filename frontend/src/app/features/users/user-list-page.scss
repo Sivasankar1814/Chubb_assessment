@@ -1,0 +1,163 @@
+.cta {
+  height: 44px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr) auto;
+  gap: 12px 16px;
+  align-items: center;
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.results {
+  padding: 0;
+  overflow: hidden;
+}
+
+.count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 20px 8px;
+  color: var(--app-muted);
+  font: var(--mat-sys-label-large);
+
+  mat-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+}
+
+.loading-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+
+  .skeleton {
+    height: 56px;
+  }
+}
+
+.people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1.6fr) auto;
+    align-items: center;
+    gap: 6px 16px;
+    padding: 14px 20px;
+    border-top: 1px solid var(--app-border);
+    transition: background var(--app-fast) var(--app-ease);
+
+    &:hover {
+      background: color-mix(in srgb, var(--mat-sys-primary) 5%, transparent);
+    }
+
+    @media (max-width: 760px) {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      padding: 14px 16px;
+    }
+  }
+}
+
+.avatar {
+  --avatar-size: 44px;
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .name {
+    font: var(--mat-sys-title-small);
+    font-weight: 650;
+  }
+
+  .handle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: var(--mat-sys-body-small);
+  }
+}
+
+// Role, details and date sit in one line on a desktop and wrap under the name on a phone.
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  font: var(--mat-sys-body-small);
+
+  @media (max-width: 760px) {
+    grid-column: 2 / -1;
+    grid-row: 2;
+  }
+}
+
+.role {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mat-sys-on-surface);
+  font: var(--mat-sys-label-large);
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    color: var(--mat-sys-primary);
+  }
+}
+
+// Active or not is a state, so it carries an icon and a word as well as a colour.
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 11px 3px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--app-good) 40%, transparent);
+  background: color-mix(in srgb, var(--app-good) 13%, transparent);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    color: var(--app-good);
+  }
+
+  &.off {
+    border-color: color-mix(in srgb, var(--app-neutral) 40%, transparent);
+    background: color-mix(in srgb, var(--app-neutral) 13%, transparent);
+
+    mat-icon {
+      color: var(--app-neutral);
+    }
+  }
+
+  // On a phone the badge sits beside the name, not wherever the grid happens to put it.
+  @media (max-width: 760px) {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: start;
+  }
+
+  @media (forced-colors: active) {
+    border-color: CanvasText;
+  }
+}

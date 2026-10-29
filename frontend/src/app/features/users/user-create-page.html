@@ -1,0 +1,186 @@
+<div class="page">
+  <a class="back-link" routerLink="/users"
+    ><mat-icon aria-hidden="true">arrow_back</mat-icon>All users</a
+  >
+
+  <header class="page-header">
+    <div>
+      <h1>New user</h1>
+      <p class="subtitle">
+        Register a claimant, an officer or a manager. They can sign in straight away. Fields marked
+        * are required.
+      </p>
+    </div>
+  </header>
+
+  <div class="form-layout">
+    <form class="surface-card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      @if (submitting()) {
+        <mat-progress-bar mode="indeterminate" aria-label="Creating user" />
+      }
+
+      @if (formError(); as message) {
+        <div class="inline-error" role="alert">
+          <mat-icon aria-hidden="true">error_outline</mat-icon>
+          <div>
+            <span>{{ message }}</span>
+            @if (formDetails().length > 0) {
+              <ul>
+                @for (detail of formDetails(); track detail) {
+                  <li>{{ detail }}</li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+      }
+
+      <h2 class="form-section">
+        <span class="icon-badge"><mat-icon aria-hidden="true">person</mat-icon></span>
+        Person details
+      </h2>
+      <div class="form-grid">
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>Full name</mat-label>
+          <input matInput formControlName="fullName" autocomplete="off" required />
+          @if (form.controls.fullName.hasError('required')) {
+            <mat-error>Enter their full name</mat-error>
+          } @else if (form.controls.fullName.hasError('maxlength')) {
+            <mat-error>Use at most 100 characters</mat-error>
+          } @else if (form.controls.fullName.hasError('server')) {
+            <mat-error>{{ form.controls.fullName.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" autocomplete="off" required />
+          @if (form.controls.email.hasError('required')) {
+            <mat-error>Enter an email address</mat-error>
+          } @else if (form.controls.email.hasError('email')) {
+            <mat-error>Enter a valid email address</mat-error>
+          } @else if (form.controls.email.hasError('maxlength')) {
+            <mat-error>Use at most 120 characters</mat-error>
+          } @else if (form.controls.email.hasError('server')) {
+            <mat-error>{{ form.controls.email.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Phone</mat-label>
+          <input matInput type="tel" formControlName="phone" autocomplete="off" />
+          <mat-hint>Optional</mat-hint>
+          @if (form.controls.phone.hasError('pattern')) {
+            <mat-error>Use 7 to 20 digits; spaces, + and - are fine</mat-error>
+          } @else if (form.controls.phone.hasError('server')) {
+            <mat-error>{{ form.controls.phone.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+      </div>
+
+      <h2 class="form-section">
+        <span class="icon-badge"><mat-icon aria-hidden="true">badge</mat-icon></span>
+        Role
+      </h2>
+      <div class="form-grid">
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>Role</mat-label>
+          <mat-select formControlName="role" required>
+            @for (option of roles; track option) {
+              <mat-option [value]="option">{{ option | enumLabel }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
+
+      <h2 class="form-section">
+        <span class="icon-badge"><mat-icon aria-hidden="true">key</mat-icon></span>
+        Sign-in
+      </h2>
+      <div class="form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Username</mat-label>
+          <input matInput formControlName="username" autocomplete="off" required />
+          @if (form.controls.username.hasError('required')) {
+            <mat-error>Choose a username</mat-error>
+          } @else if (form.controls.username.hasError('maxlength')) {
+            <mat-error>Use at most 50 characters</mat-error>
+          } @else if (form.controls.username.hasError('server')) {
+            <mat-error>{{ form.controls.username.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Password</mat-label>
+          <input
+            matInput
+            formControlName="password"
+            autocomplete="new-password"
+            required
+            [type]="hidePassword() ? 'password' : 'text'"
+          />
+          <button
+            matIconButton
+            matSuffix
+            type="button"
+            [attr.aria-label]="hidePassword() ? 'Show password' : 'Hide password'"
+            [attr.aria-pressed]="!hidePassword()"
+            (click)="hidePassword.set(!hidePassword())"
+          >
+            <mat-icon>{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
+          </button>
+          <mat-hint>6 to 72 characters</mat-hint>
+          @if (form.controls.password.hasError('required')) {
+            <mat-error>Choose a password</mat-error>
+          } @else if (form.controls.password.hasError('minlength')) {
+            <mat-error>Use at least 6 characters</mat-error>
+          } @else if (form.controls.password.hasError('maxlength')) {
+            <mat-error>Use at most 72 characters</mat-error>
+          } @else if (form.controls.password.hasError('server')) {
+            <mat-error>{{ form.controls.password.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-slide-toggle class="full active" formControlName="active"
+          >Active: can sign in</mat-slide-toggle
+        >
+      </div>
+
+      <div class="form-actions">
+        <a matButton routerLink="/users">Cancel</a>
+        <button matButton="filled" type="submit" class="submit" [disabled]="submitting()">
+          Create user
+        </button>
+      </div>
+    </form>
+
+    <aside class="surface-card side-note" aria-labelledby="roles-heading">
+      <h2 id="roles-heading" class="section-title">Roles at a glance</h2>
+      <ol>
+        <li>
+          <span class="icon-badge"><mat-icon aria-hidden="true">person</mat-icon></span>
+          <div>
+            <strong>Claimant</strong>
+            <p class="muted">
+              Files and follows their own claims, and chooses the market when filing each one.
+            </p>
+          </div>
+        </li>
+        <li>
+          <span class="icon-badge"><mat-icon aria-hidden="true">badge</mat-icon></span>
+          <div>
+            <strong>Officer</strong>
+            <p class="muted">Reviews the claims assigned to them, up to 5 open at a time.</p>
+          </div>
+        </li>
+        <li>
+          <span class="icon-badge"><mat-icon aria-hidden="true">supervisor_account</mat-icon></span>
+          <div>
+            <strong>Manager</strong>
+            <p class="muted">Assigns claims, watches workload and registers other users.</p>
+          </div>
+        </li>
+      </ol>
+    </aside>
+  </div>
+</div>

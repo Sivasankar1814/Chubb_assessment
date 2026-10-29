@@ -1,0 +1,175 @@
+<div class="page">
+  <a class="back-link" routerLink="/claims"
+    ><mat-icon aria-hidden="true">arrow_back</mat-icon>All claims</a
+  >
+
+  @let current = claim();
+  @if (current.state === 'loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Loading claim" />
+    <div class="loading" aria-hidden="true">
+      <span class="skeleton head-skeleton"></span>
+      <div class="layout">
+        <span class="skeleton body-skeleton"></span>
+        <span class="skeleton side-skeleton"></span>
+      </div>
+    </div>
+  } @else if (current.state === 'error') {
+    <section class="surface-card">
+      <app-state-message
+        kind="error"
+        [title]="errorTitle(current.problem.status)"
+        [message]="current.problem.message"
+        [retryable]="current.problem.status !== 404 && current.problem.status !== 403"
+        (retry)="retry()"
+      />
+    </section>
+  } @else {
+    @let c = current.data;
+    <header class="page-header detail-head surface-card">
+      <div>
+        <h1>{{ c.claimNumber }}</h1>
+        <p class="subtitle">
+          {{ c.claimType | enumLabel }} claim · {{ c.market | marketName }} · filed
+          {{ c.createdAt | date: 'dd MMM yyyy' }}
+        </p>
+      </div>
+      <app-status-chip [status]="c.status" />
+    </header>
+
+    @if (c.infoRequest; as request) {
+      <section class="banner" [class.urgent]="awaitingMyReply(c)" role="status">
+        <mat-icon aria-hidden="true">{{
+          awaitingMyReply(c) ? 'priority_high' : 'hourglass_top'
+        }}</mat-icon>
+        <div>
+          <h2>
+            {{ awaitingMyReply(c) ? 'We need information from you' : 'Waiting for the claimant' }}
+          </h2>
+          <p class="message">{{ request.message }}</p>
+          <p class="meta muted">
+            Asked by {{ request.requestedBy }} on
+            {{ request.requestedAt | date: 'dd MMM yyyy, HH:mm' }}
+          </p>
+        </div>
+      </section>
+    }
+
+    <div class="layout">
+      <section class="surface-card" aria-labelledby="details-heading">
+        <h2 id="details-heading" class="section-title">Details</h2>
+        <dl class="facts">
+          <div>
+            <dt>Claimant</dt>
+            <dd>{{ c.claimantName }}</dd>
+          </div>
+          <div>
+            <dt>Type</dt>
+            <dd>{{ c.claimType | enumLabel }}</dd>
+          </div>
+          <div>
+            <dt>Market</dt>
+            <dd>{{ c.market | marketName }}</dd>
+          </div>
+          @if (c.policyNumber) {
+            <div>
+              <dt>Policy number</dt>
+              <dd>{{ c.policyNumber }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Claim amount</dt>
+            <dd class="amount">{{ c.claimAmount | money: c.market : true }}</dd>
+          </div>
+          <div>
+            <dt>Incident date</dt>
+            <dd>{{ c.incidentDate | date: 'dd MMM yyyy' }}</dd>
+          </div>
+          <div>
+            <dt>Last updated</dt>
+            <dd>{{ c.updatedAt | date: 'dd MMM yyyy, HH:mm' }}</dd>
+          </div>
+          <div class="wide">
+            <dt>Description</dt>
+            <dd class="description">{{ c.description }}</dd>
+          </div>
+        </dl>
+
+        @if (c.lastReply; as reply) {
+          <div class="reply">
+            <h3>Latest reply from the claimant</h3>
+            <p class="message">{{ reply.message }}</p>
+            <p class="meta muted">
+              {{ reply.repliedBy }} · {{ reply.repliedAt | date: 'dd MMM yyyy, HH:mm' }}
+            </p>
+          </div>
+        }
+      </section>
+
+      <aside class="side">
+        <section class="surface-card" aria-labelledby="handler-heading">
+          <h2 id="handler-heading" class="section-title">Handled by</h2>
+          <p class="officer" [class.muted]="c.assignedOfficerId === null && !handledByManager(c)">
+            <span class="icon-badge"
+              ><mat-icon aria-hidden="true">{{
+                handledByManager(c) ? 'supervisor_account' : 'badge'
+              }}</mat-icon></span
+            >{{ officerName(c) }}
+          </p>
+          @if (assignable()) {
+            <button matButton="outlined" type="button" (click)="openAssign(c)">
+              <mat-icon>{{ c.assignedOfficerId === null ? 'person_add' : 'swap_horiz' }}</mat-icon>
+              {{ c.assignedOfficerId === null ? 'Assign officer' : 'Reassign' }}
+            </button>
+          }
+        </section>
+
+        <section class="surface-card" aria-labelledby="actions-heading">
+          <h2 id="actions-heading" class="section-title">Actions</h2>
+          @if (actions().length === 0) {
+            <p class="muted none">
+              @if (c.status === 'CLOSED') {
+                This claim is closed.
+              } @else if (!isStaff()) {
+                Nothing is needed from you right now.
+              } @else if (handledByManager(c)) {
+                A manager is handling this claim directly.
+              } @else {
+                Only the assigned officer or a manager can act on this claim.
+              }
+            </p>
+          } @else {
+            <div class="actions">
+              @for (action of actions(); track action.id; let first = $first) {
+                <button
+                  [matButton]="first && action.tone === 'primary' ? 'filled' : 'outlined'"
+                  type="button"
+                  [class.danger]="action.tone === 'danger'"
+                  (click)="openAction(c, action)"
+                >
+                  <mat-icon>{{ action.icon }}</mat-icon
+                  >{{ action.label }}
+                </button>
+              }
+            </div>
+          }
+        </section>
+      </aside>
+    </div>
+
+    <section class="surface-card" aria-labelledby="history-heading">
+      <h2 id="history-heading" class="section-title">History</h2>
+      @let log = history();
+      @if (log.state === 'loading') {
+        <mat-progress-bar mode="indeterminate" aria-label="Loading history" />
+      } @else if (log.state === 'error') {
+        <app-state-message
+          kind="error"
+          title="Couldn't load the history"
+          [message]="log.problem.message"
+        />
+      } @else {
+        <app-history-timeline [entries]="log.data" />
+      }
+    </section>
+  }
+</div>

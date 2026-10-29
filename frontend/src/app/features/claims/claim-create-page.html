@@ -1,0 +1,218 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>File a claim</h1>
+      <p class="subtitle">Tell us what happened. Fields marked * are required.</p>
+    </div>
+  </header>
+
+  <div class="form-layout">
+    <form class="surface-card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      @if (submitting()) {
+        <mat-progress-bar mode="indeterminate" aria-label="Submitting claim" />
+      }
+
+      @if (formError(); as message) {
+        <div class="inline-error" role="alert">
+          <mat-icon aria-hidden="true">error_outline</mat-icon>
+          <div>
+            <span>{{ message }}</span>
+            @if (formDetails().length > 0) {
+              <ul>
+                @for (detail of formDetails(); track detail) {
+                  <li>{{ detail }}</li>
+                }
+              </ul>
+            }
+          </div>
+        </div>
+      }
+
+      <h2 class="form-section">
+        <span class="icon-badge"><mat-icon aria-hidden="true">person</mat-icon></span>
+        Claimant
+      </h2>
+      <div class="form-grid">
+        <!-- Everyone files in their own name: claimants, officers and managers see theirs, filled in. -->
+        <mat-form-field appearance="outline">
+          <mat-label>Claimant name</mat-label>
+          <input matInput formControlName="claimantName" />
+          <mat-hint>Taken from your profile</mat-hint>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Market</mat-label>
+          <mat-select formControlName="market" [required]="marketSource() === 'choice'">
+            @for (market of markets; track market) {
+              <mat-option [value]="market">{{ market | marketName }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>{{ marketHint() }}</mat-hint>
+          @if (form.controls.market.hasError('required')) {
+            <mat-error>Choose the market for this claim</mat-error>
+          } @else if (form.controls.market.hasError('server')) {
+            <mat-error>{{ form.controls.market.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Policy number</mat-label>
+          <input matInput formControlName="policyNumber" />
+          <mat-hint>{{ policyHint() }}</mat-hint>
+        </mat-form-field>
+      </div>
+
+      <h2 class="form-section">
+        <span class="icon-badge"><mat-icon aria-hidden="true">event_note</mat-icon></span>
+        Incident
+      </h2>
+      <div class="form-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>Claim type</mat-label>
+          <mat-select formControlName="claimType" required>
+            @for (type of types; track type) {
+              <mat-option [value]="type">{{ type | enumLabel }}</mat-option>
+            }
+          </mat-select>
+          @if (form.controls.claimType.hasError('required')) {
+            <mat-error>Choose a claim type</mat-error>
+          } @else if (form.controls.claimType.hasError('server')) {
+            <mat-error>{{ form.controls.claimType.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Date of incident</mat-label>
+          <input
+            matInput
+            [matDatepicker]="picker"
+            formControlName="incidentDate"
+            [max]="maxDate"
+            required
+          />
+          <mat-datepicker-toggle matIconSuffix [for]="picker" />
+          <mat-datepicker #picker />
+          @if (form.controls.incidentDate.hasError('required')) {
+            <mat-error>Enter the date it happened</mat-error>
+          } @else if (form.controls.incidentDate.hasError('matDatepickerParse')) {
+            <mat-error>Enter a valid date, for example 28/10/2026</mat-error>
+          } @else if (
+            form.controls.incidentDate.hasError('futureDate') ||
+            form.controls.incidentDate.hasError('matDatepickerMax')
+          ) {
+            <mat-error>The incident cannot be in the future</mat-error>
+          } @else if (form.controls.incidentDate.hasError('server')) {
+            <mat-error>{{ form.controls.incidentDate.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>Claim amount</mat-label>
+          @if (currency(); as c) {
+            <span matTextPrefix class="currency-affix">{{ c.symbol }}&nbsp;</span>
+          }
+          <input
+            matInput
+            type="number"
+            [attr.inputmode]="currency()?.decimals === 0 ? 'numeric' : 'decimal'"
+            [attr.step]="currency()?.decimals === 0 ? 1 : 0.01"
+            min="0.01"
+            formControlName="claimAmount"
+            required
+          />
+          @if (currency(); as c) {
+            <span matTextSuffix class="currency-affix">{{ c.code }}</span>
+          }
+          @if (currency(); as c) {
+            <mat-hint
+              >{{ c.name }} ({{ c.code }}),
+              {{ c.decimals === 0 ? 'whole numbers only' : 'up to 2 decimal places' }}</mat-hint
+            >
+          } @else {
+            <mat-hint>The currency follows the market</mat-hint>
+          }
+          @if (form.controls.claimAmount.hasError('required')) {
+            <mat-error>Enter the amount you are claiming</mat-error>
+          } @else if (form.controls.claimAmount.hasError('min')) {
+            <mat-error>The amount must be greater than zero</mat-error>
+          } @else if (form.controls.claimAmount.hasError('amountDecimals')) {
+            <mat-error>
+              @if (currency(); as c) {
+                {{
+                  c.decimals === 0
+                    ? 'Use a whole number: ' + c.code + ' has no decimal places'
+                    : 'Use at most 2 decimal places'
+                }}
+              } @else {
+                Use at most 2 decimal places
+              }
+            </mat-error>
+          } @else if (form.controls.claimAmount.hasError('amountTooLarge')) {
+            <mat-error>That amount is too large</mat-error>
+          } @else if (form.controls.claimAmount.hasError('server')) {
+            <mat-error>{{ form.controls.claimAmount.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+      </div>
+
+      <h2 class="form-section">
+        <span class="icon-badge"><mat-icon aria-hidden="true">notes</mat-icon></span>
+        Description
+      </h2>
+      <div class="form-grid">
+        <mat-form-field appearance="outline" class="full">
+          <mat-label>What happened?</mat-label>
+          <textarea
+            matInput
+            rows="5"
+            formControlName="description"
+            [maxlength]="maxDescription"
+            required
+          ></textarea>
+          <mat-hint align="end"
+            >{{ form.controls.description.value.length }} / {{ maxDescription }}</mat-hint
+          >
+          @if (form.controls.description.hasError('required')) {
+            <mat-error>Describe what happened</mat-error>
+          } @else if (form.controls.description.hasError('server')) {
+            <mat-error>{{ form.controls.description.getError('server') }}</mat-error>
+          }
+        </mat-form-field>
+      </div>
+
+      <div class="form-actions">
+        <a matButton routerLink="/claims">Cancel</a>
+        <button matButton="filled" type="submit" class="submit" [disabled]="submitting()">
+          Submit claim
+        </button>
+      </div>
+    </form>
+
+    <aside class="surface-card side-note" aria-labelledby="next-heading">
+      <h2 id="next-heading" class="section-title">What happens next</h2>
+      <ol>
+        <li>
+          <span class="icon-badge"><mat-icon aria-hidden="true">send</mat-icon></span>
+          <div>
+            <strong>Your claim is filed</strong>
+            <p class="muted">It gets a claim number straight away and starts as Open.</p>
+          </div>
+        </li>
+        <li>
+          <span class="icon-badge"><mat-icon aria-hidden="true">person_add</mat-icon></span>
+          <div>
+            <strong>An officer picks it up</strong>
+            <p class="muted">A manager assigns one, or an officer takes it from the queue.</p>
+          </div>
+        </li>
+        <li>
+          <span class="icon-badge"><mat-icon aria-hidden="true">forum</mat-icon></span>
+          <div>
+            <strong>You hear back here</strong>
+            <p class="muted">If more detail is needed, the request appears on the claim page.</p>
+          </div>
+        </li>
+      </ol>
+    </aside>
+  </div>
+</div>

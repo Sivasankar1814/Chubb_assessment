@@ -1,0 +1,105 @@
+<a class="skip-link" href="#main-content" (click)="skipToContent($event)">Skip to content</a>
+
+<mat-sidenav-container class="container">
+  <mat-sidenav
+    #drawer
+    class="sidenav"
+    [class.handset]="isHandset()"
+    [mode]="isHandset() ? 'over' : 'side'"
+    [opened]="!isHandset()"
+    [attr.aria-label]="'Main navigation'"
+  >
+    <div class="side-inner">
+      <a class="brand" routerLink="/dashboard" (click)="isHandset() && drawer.close()">
+        <app-brand-mark />
+        <span class="brand-text">
+          <strong>Claims</strong>
+          <span>Management</span>
+        </span>
+      </a>
+
+      <nav aria-label="Main">
+        <ul class="nav">
+          @for (item of navItems(); track item.path) {
+            <li>
+              <a
+                class="nav-link"
+                [routerLink]="item.path"
+                routerLinkActive="active"
+                ariaCurrentWhenActive="page"
+                [routerLinkActiveOptions]="{ exact: item.exact === true }"
+                (click)="isHandset() && drawer.close()"
+              >
+                <mat-icon aria-hidden="true">{{ item.icon }}</mat-icon>
+                <span>{{ item.label }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      </nav>
+
+      <p class="side-foot">
+        <mat-icon aria-hidden="true">verified_user</mat-icon>
+        Secure claims workspace
+      </p>
+    </div>
+  </mat-sidenav>
+
+  <mat-sidenav-content class="content">
+    <header class="topbar">
+      @if (isHandset()) {
+        <button
+          matIconButton
+          type="button"
+          aria-label="Open navigation menu"
+          (click)="drawer.toggle()"
+        >
+          <mat-icon>menu</mat-icon>
+        </button>
+        <a class="mobile-brand" routerLink="/dashboard">
+          <app-brand-mark class="small" />
+          <span>Claims Management</span>
+        </a>
+      }
+      <span class="spacer"></span>
+
+      <button
+        matIconButton
+        type="button"
+        [attr.aria-label]="'Theme: ' + theme.current() + '. Activate to change.'"
+        [matTooltip]="'Theme: ' + theme.current()"
+        (click)="theme.cycle()"
+      >
+        <mat-icon>{{ themeIcon() }}</mat-icon>
+      </button>
+
+      <button
+        type="button"
+        class="user-button"
+        [matMenuTriggerFor]="userMenu"
+        [attr.aria-label]="'Account menu for ' + (user()?.fullName ?? '')"
+      >
+        <app-avatar [name]="user()?.fullName ?? ''" tone="brand" />
+        <span class="user-text">
+          <span class="user-name">{{ user()?.fullName ?? '' }}</span>
+          <span class="user-role">{{ role() | enumLabel }}</span>
+        </span>
+        <mat-icon class="chevron" aria-hidden="true">expand_more</mat-icon>
+      </button>
+      <mat-menu #userMenu="matMenu" xPosition="before">
+        <div class="menu-header" role="presentation">
+          <strong>{{ user()?.fullName }}</strong>
+          <span class="muted">{{ role() | enumLabel }}</span>
+        </div>
+        <a mat-menu-item routerLink="/profile"><mat-icon>person</mat-icon><span>Profile</span></a>
+        <button mat-menu-item type="button" (click)="signOut()">
+          <mat-icon>logout</mat-icon><span>Sign out</span>
+        </button>
+      </mat-menu>
+    </header>
+
+    <main id="main-content" #main tabindex="-1">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

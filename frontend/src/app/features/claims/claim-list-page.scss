@@ -1,0 +1,196 @@
+.cta {
+  height: 44px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 16px;
+  align-items: center;
+
+  .search {
+    grid-column: span 2;
+
+    @media (max-width: 640px) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  mat-slide-toggle {
+    white-space: nowrap;
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}
+
+// On a desktop the extra filters are just more cells of the grid above; on a phone they stack in a panel.
+.more-filters {
+  display: contents;
+
+  @media (max-width: 640px) {
+    display: grid;
+    gap: 12px;
+    margin-top: 8px;
+  }
+}
+
+.filter-toggle {
+  justify-self: start;
+  height: 44px;
+}
+
+.count-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--app-brand-600);
+  color: var(--app-on-brand);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.results {
+  padding: 0;
+  overflow: hidden;
+}
+
+.count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 20px 8px;
+  color: var(--app-muted);
+  font: var(--mat-sys-label-large);
+
+  mat-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+  }
+}
+
+.loading-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+
+  .skeleton {
+    height: 44px;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  background: transparent;
+}
+
+th[mat-header-cell] {
+  height: 48px;
+  background: color-mix(in srgb, var(--mat-sys-primary) 5%, var(--app-card));
+  color: var(--app-muted);
+  font: var(--mat-sys-label-medium);
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+td[mat-cell] {
+  height: 60px;
+  border-bottom-color: var(--app-border);
+}
+
+tr.clickable {
+  cursor: pointer;
+  transition: background var(--app-fast) var(--app-ease);
+
+  &:hover {
+    background: color-mix(in srgb, var(--mat-sys-primary) 6%, transparent);
+  }
+
+  &:last-of-type td[mat-cell] {
+    border-bottom-color: transparent;
+  }
+}
+
+.claim-link {
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// Tighter than Material's 16px, so more fits before the table has to scroll sideways.
+th[mat-header-cell],
+td[mat-cell] {
+  padding-inline: 12px;
+}
+
+// The manager's Assign / Reassign button: pinned to the right, so it stays in reach however wide the table is.
+.actions-col {
+  width: 1%;
+  padding-inline-end: 16px;
+  text-align: right;
+  white-space: nowrap;
+  // Opaque, so the columns scrolling underneath do not show through, with a soft edge to say it floats.
+  background: var(--app-card);
+  box-shadow: -10px 0 8px -10px var(--app-shadow-color);
+}
+
+th.actions-col {
+  background: color-mix(in srgb, var(--mat-sys-primary) 5%, var(--app-card));
+}
+
+tr.clickable:hover .actions-col {
+  background: color-mix(in srgb, var(--mat-sys-primary) 6%, var(--app-card));
+}
+
+.row-action {
+  height: 36px;
+}
+
+// Only rendered on a phone, where it replaces the claimant and amount columns.
+.sub {
+  display: block;
+  margin-top: 2px;
+  font: var(--mat-sys-body-small);
+}
+
+// On a phone three columns must fit the screen, so the cells give up some of their side padding.
+@media (max-width: 640px) {
+  th[mat-header-cell],
+  td[mat-cell] {
+    padding-inline: 8px;
+  }
+
+  th[mat-header-cell]:first-of-type,
+  td[mat-cell]:first-of-type {
+    padding-inline-start: 16px;
+  }
+
+  th[mat-header-cell]:last-of-type,
+  td[mat-cell]:last-of-type {
+    padding-inline-end: 16px;
+  }
+}
+
+mat-paginator {
+  background: transparent;
+  border-top: 1px solid var(--app-border);
+}

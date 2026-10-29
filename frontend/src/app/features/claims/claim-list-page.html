@@ -1,0 +1,262 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>{{ isStaff() ? 'Claims' : 'My claims' }}</h1>
+      <p class="subtitle">
+        {{
+          isStaff()
+            ? 'Every claim you can see, newest activity first.'
+            : 'Claims you have filed and where they stand.'
+        }}
+      </p>
+    </div>
+    <a matButton="filled" class="cta" routerLink="/claims/new"><mat-icon>add</mat-icon>New claim</a>
+  </header>
+
+  <section class="surface-card filters" aria-label="Filter claims">
+    <form [formGroup]="form" class="filter-grid">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search">
+        <mat-label>Search</mat-label>
+        <mat-icon matPrefix aria-hidden="true">search</mat-icon>
+        <input matInput formControlName="q" placeholder="Claim number, name or description" />
+      </mat-form-field>
+
+      @if (isPhone()) {
+        <button
+          matButton="tonal"
+          type="button"
+          class="filter-toggle"
+          aria-controls="more-filters"
+          [attr.aria-expanded]="filtersOpen()"
+          (click)="filtersOpen.set(!filtersOpen())"
+        >
+          <mat-icon>tune</mat-icon>Filters
+          @if (activeFilterCount() > 0) {
+            <span class="count-badge" aria-label="{{ activeFilterCount() }} active">{{
+              activeFilterCount()
+            }}</span>
+          }
+        </button>
+      }
+
+      @if (!isPhone() || filtersOpen()) {
+        <div id="more-filters" class="more-filters">
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Status</mat-label>
+            <mat-select formControlName="status">
+              <mat-option [value]="null">All statuses</mat-option>
+              @for (status of statuses; track status) {
+                <mat-option [value]="status">{{ status | enumLabel }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Type</mat-label>
+            <mat-select formControlName="claimType">
+              <mat-option [value]="null">All types</mat-option>
+              @for (type of types; track type) {
+                <mat-option [value]="type">{{ type | enumLabel }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" subscriptSizing="dynamic">
+            <mat-label>Market</mat-label>
+            <mat-select formControlName="market">
+              <mat-option [value]="null">All markets</mat-option>
+              @for (market of markets; track market) {
+                <mat-option [value]="market">{{ market | marketName }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          @if (isStaff()) {
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Claimant</mat-label>
+              <mat-select formControlName="claimantId">
+                <mat-option [value]="null">Any claimant</mat-option>
+                @for (claimant of claimants(); track claimant.id) {
+                  <mat-option [value]="claimant.id">{{ claimant.fullName }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>Officer</mat-label>
+              <mat-select formControlName="assignedOfficerId">
+                <mat-option [value]="null">Any officer</mat-option>
+                @for (officer of officers(); track officer.id) {
+                  <mat-option [value]="officer.id">{{ officer.fullName }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-slide-toggle formControlName="unassigned">Unassigned only</mat-slide-toggle>
+          }
+        </div>
+      }
+
+      @if (hasFilters()) {
+        <button matButton type="button" (click)="clearFilters()">
+          <mat-icon>filter_alt_off</mat-icon>Clear filters
+        </button>
+      }
+    </form>
+  </section>
+
+  <section
+    class="surface-card results"
+    aria-label="Claims"
+    [attr.aria-busy]="result().state === 'loading'"
+  >
+    @let current = result();
+    @if (current.state === 'loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Loading claims" />
+      <div class="loading-rows" aria-hidden="true">
+        @for (n of placeholders; track n) {
+          <span class="skeleton"></span>
+        }
+      </div>
+    } @else if (current.state === 'error') {
+      <app-state-message
+        kind="error"
+        title="Couldn't load claims"
+        [message]="current.problem.message"
+        [retryable]="true"
+        (retry)="retry()"
+      />
+    } @else {
+      @if (rows().length === 0) {
+        <app-state-message
+          [title]="hasFilters() ? 'No claims match these filters' : 'No claims yet'"
+          [message]="
+            hasFilters()
+              ? 'Try removing a filter or searching for something else.'
+              : isStaff()
+                ? 'Claims filed by claimants, officers and managers will appear here. You can also file one yourself.'
+                : 'Claims you file will appear here.'
+          "
+        >
+          @if (hasFilters()) {
+            <button matButton="outlined" type="button" (click)="clearFilters()">
+              Clear filters
+            </button>
+          } @else {
+            <a matButton="filled" routerLink="/claims/new">File a claim</a>
+          }
+        </app-state-message>
+      } @else {
+        <p class="count" aria-live="polite">
+          <mat-icon aria-hidden="true">list_alt</mat-icon>
+          {{ rows().length }} {{ rows().length === 1 ? 'claim' : 'claims' }}
+        </p>
+        <div class="table-wrap">
+          <table
+            mat-table
+            [dataSource]="dataSource"
+            matSort
+            matSortActive="updatedAt"
+            matSortDirection="desc"
+          >
+            <ng-container matColumnDef="claimNumber">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Claim</th>
+              <td mat-cell *matCellDef="let claim">
+                <a [routerLink]="['/claims', claim.id]" class="claim-link">{{
+                  claim.claimNumber
+                }}</a>
+                @if (isPhone()) {
+                  <span class="sub muted"
+                    >{{ claim.claimantName }} · {{ claim.claimAmount | money: claim.market }}</span
+                  >
+                }
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="claimantName">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Claimant</th>
+              <td mat-cell *matCellDef="let claim">{{ claim.claimantName }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="claimType">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Type</th>
+              <td mat-cell *matCellDef="let claim">{{ claim.claimType | enumLabel }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="market">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Market</th>
+              <td mat-cell *matCellDef="let claim">{{ claim.market | marketName }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Status</th>
+              <td mat-cell *matCellDef="let claim"><app-status-chip [status]="claim.status" /></td>
+            </ng-container>
+
+            <ng-container matColumnDef="claimAmount">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header class="num">Amount</th>
+              <td mat-cell *matCellDef="let claim" class="num">
+                {{ claim.claimAmount | money: claim.market }}
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="assignedOfficer">
+              <th mat-header-cell *matHeaderCellDef>Officer</th>
+              <td mat-cell *matCellDef="let claim">
+                <span
+                  [class.muted]="claim.assignedOfficerId === null && !handledByManager(claim)"
+                  >{{ officerName(claim) }}</span
+                >
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="updatedAt">
+              <th mat-header-cell *matHeaderCellDef mat-sort-header>Updated</th>
+              <td mat-cell *matCellDef="let claim">{{ claim.updatedAt | date: 'dd MMM yyyy' }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions" stickyEnd>
+              <th mat-header-cell *matHeaderCellDef class="actions-col">
+                <span class="visually-hidden">Actions</span>
+              </th>
+              <td mat-cell *matCellDef="let claim" class="actions-col">
+                @if (canAssign(claim)) {
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    class="row-action"
+                    [attr.aria-label]="
+                      (claim.assignedOfficerId === null
+                        ? 'Assign officer for '
+                        : 'Reassign officer for ') + claim.claimNumber
+                    "
+                    (click)="assign(claim)"
+                  >
+                    <mat-icon>{{
+                      claim.assignedOfficerId === null ? 'person_add' : 'swap_horiz'
+                    }}</mat-icon>
+                    {{ claim.assignedOfficerId === null ? 'Assign' : 'Reassign' }}
+                  </button>
+                }
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="columns()"></tr>
+            <tr
+              mat-row
+              *matRowDef="let row; columns: columns()"
+              class="clickable"
+              (click)="open(row, $event)"
+            ></tr>
+          </table>
+        </div>
+        <mat-paginator
+          [pageSize]="10"
+          [pageSizeOptions]="[10, 25, 50]"
+          showFirstLastButtons
+          aria-label="Select page of claims"
+        />
+      }
+    }
+  </section>
+</div>

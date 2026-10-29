@@ -1,0 +1,190 @@
+.cta {
+  height: 44px;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 20px;
+
+  @media (max-width: 860px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+a.hero,
+a.hero:hover {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 168px;
+  border: 0;
+  background: var(--app-brand-gradient);
+  color: var(--app-on-brand);
+}
+
+.hero-art {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 132px;
+  height: 132px;
+  font-size: 132px;
+  color: var(--app-glass-bg);
+  rotate: -12deg;
+  transition: transform var(--app-base) var(--app-ease);
+}
+
+a.hero:hover .hero-art {
+  transform: scale(1.08) rotate(4deg);
+}
+
+.hero-label {
+  color: var(--app-on-brand-muted);
+  font: var(--mat-sys-label-large);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero-value {
+  font-size: 4rem;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--app-brand-200);
+  font: var(--mat-sys-label-large);
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    transition: transform var(--app-fast) var(--app-ease);
+  }
+}
+
+a.hero:hover .hero-link mat-icon {
+  transform: translateX(4px);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+a.tile {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 18px 18px 16px;
+
+  // A coloured edge ties the tile to its status; the chip still spells the status out in words.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 4px;
+    background: var(--tile-color);
+  }
+
+  &.zero {
+    .tile-value {
+      color: var(--app-muted);
+    }
+
+    &::before {
+      opacity: 0.4;
+    }
+  }
+}
+
+.tile-value {
+  font-size: 2.25rem;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-skeleton {
+  min-height: 168px;
+  border-radius: var(--app-radius);
+}
+
+.tile-skeleton {
+  height: 98px;
+  border-radius: var(--app-radius);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+.more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  font: var(--mat-sys-label-large);
+  text-decoration: none;
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    transition: transform var(--app-fast) var(--app-ease);
+  }
+
+  &:hover {
+    text-decoration: underline;
+
+    mat-icon {
+      transform: translateX(3px);
+    }
+  }
+}
+
+.team {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .team-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .name {
+    display: block;
+    margin-bottom: 6px;
+    font: var(--mat-sys-title-small);
+    font-weight: 650;
+  }
+}

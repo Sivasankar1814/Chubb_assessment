@@ -1,0 +1,126 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Users</h1>
+      <p class="subtitle">Everyone who can sign in, newest first.</p>
+    </div>
+    <a matButton="filled" class="cta" routerLink="/users/new"
+      ><mat-icon>person_add</mat-icon>New user</a
+    >
+  </header>
+
+  <section class="surface-card" aria-label="Filter users">
+    <form [formGroup]="filters" class="filter-grid">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search">
+        <mat-label>Search</mat-label>
+        <mat-icon matPrefix aria-hidden="true">search</mat-icon>
+        <input matInput formControlName="q" placeholder="Name, username or email" />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>Role</mat-label>
+        <mat-select formControlName="role">
+          <mat-option [value]="null">All roles</mat-option>
+          @for (role of roles; track role) {
+            <mat-option [value]="role">{{ role | enumLabel }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      @if (hasFilters()) {
+        <button matButton type="button" (click)="clearFilters()">
+          <mat-icon>filter_alt_off</mat-icon>Clear filters
+        </button>
+      }
+    </form>
+  </section>
+
+  <section
+    class="surface-card results"
+    aria-label="Users"
+    [attr.aria-busy]="result().state === 'loading'"
+  >
+    @let current = result();
+    @if (current.state === 'loading') {
+      <mat-progress-bar mode="indeterminate" aria-label="Loading users" />
+      <div class="loading-rows" aria-hidden="true">
+        @for (n of placeholders; track n) {
+          <span class="skeleton"></span>
+        }
+      </div>
+    } @else if (current.state === 'error') {
+      <app-state-message
+        kind="error"
+        title="Couldn't load users"
+        [message]="current.problem.message"
+        [retryable]="true"
+        (retry)="retry()"
+      />
+    } @else if (rows().length === 0) {
+      <app-state-message
+        [title]="hasFilters() ? 'No users match these filters' : 'No users yet'"
+        [message]="
+          hasFilters()
+            ? 'Try removing a filter or searching for something else.'
+            : 'Register the first user to get started.'
+        "
+      >
+        @if (hasFilters()) {
+          <button matButton="outlined" type="button" (click)="clearFilters()">Clear filters</button>
+        } @else {
+          <a matButton="filled" routerLink="/users/new">New user</a>
+        }
+      </app-state-message>
+    } @else {
+      <p class="count" aria-live="polite">
+        <mat-icon aria-hidden="true">groups</mat-icon>
+        {{ rows().length }} {{ rows().length === 1 ? 'user' : 'users' }}
+      </p>
+      <ul class="people">
+        @for (user of rows(); track user.id) {
+          <li>
+            <app-avatar class="avatar" [name]="user.fullName" />
+            <div class="who">
+              <span class="name">{{ user.fullName }}</span>
+              <span class="muted handle">{{ user.username }} · {{ user.email }}</span>
+            </div>
+            <div class="meta">
+              <span class="role"
+                ><mat-icon aria-hidden="true">{{ roleIcon(user.role) }}</mat-icon
+                >{{ user.role | enumLabel }}</span
+              >
+              <span class="detail muted">
+                @switch (user.role) {
+                  @case ('CLAIMANT') {
+                    @if (user.market) {
+                      {{ user.market | marketName }}
+                      @if (user.policyNumber) {
+                        · {{ user.policyNumber }}
+                      }
+                    } @else {
+                      Market chosen per claim
+                    }
+                  }
+                  @case ('OFFICER') {
+                    @if (user.specialization) {
+                      {{ user.specialization | enumLabel }} ·
+                    }
+                    capacity {{ user.maxCapacity }}
+                  }
+                  @default {
+                    Manager
+                  }
+                }
+              </span>
+              <span class="created muted">Added {{ user.createdAt | date: 'dd MMM yyyy' }}</span>
+            </div>
+            <span class="status" [class.off]="!user.active">
+              <mat-icon aria-hidden="true">{{ user.active ? 'check_circle' : 'block' }}</mat-icon>
+              {{ user.active ? 'Active' : 'Inactive' }}
+            </span>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>

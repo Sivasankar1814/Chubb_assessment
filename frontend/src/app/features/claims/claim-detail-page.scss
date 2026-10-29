@@ -1,0 +1,150 @@
+// A claim's header is the one place the page leans on brand colour: a soft wash behind the number and status.
+.detail-head {
+  padding: 24px 28px;
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--app-brand-600) 11%, var(--app-card)),
+    var(--app-card) 65%
+  );
+
+  h1 {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (max-width: 640px) {
+    padding: 18px 18px;
+  }
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 20px;
+  align-items: start;
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.head-skeleton {
+  height: 104px;
+  border-radius: var(--app-radius);
+}
+
+.body-skeleton {
+  height: 320px;
+  border-radius: var(--app-radius);
+}
+
+.side-skeleton {
+  height: 220px;
+  border-radius: var(--app-radius);
+}
+
+.banner {
+  display: flex;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: var(--app-radius);
+  border: 1px solid color-mix(in srgb, var(--app-warning) 55%, transparent);
+  border-left: 6px solid var(--app-warning);
+  background: color-mix(in srgb, var(--app-warning) 13%, var(--app-card));
+
+  mat-icon {
+    flex: none;
+    color: var(--mat-sys-on-surface);
+  }
+
+  h2 {
+    font: var(--mat-sys-title-medium);
+    font-weight: 650;
+  }
+
+  &.urgent {
+    border-color: var(--app-warning);
+    box-shadow: var(--app-shadow-md);
+  }
+}
+
+.message {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  margin: 6px 0 0;
+  font: var(--mat-sys-body-small);
+}
+
+.facts {
+  .amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .description {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+.reply {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border-radius: var(--mat-sys-corner-medium);
+  background: color-mix(in srgb, var(--mat-sys-primary) 7%, transparent);
+
+  h3 {
+    font: var(--mat-sys-title-small);
+    font-weight: 650;
+  }
+}
+
+.officer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  font: var(--mat-sys-title-small);
+  font-weight: 600;
+
+  &.muted {
+    font-weight: 400;
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  button {
+    justify-content: flex-start;
+    height: 46px;
+  }
+}
+
+.none {
+  margin: 0;
+}
+
+.danger {
+  --mat-button-outlined-label-text-color: var(--mat-sys-error);
+  --mat-button-outlined-outline-color: var(--mat-sys-error);
+}

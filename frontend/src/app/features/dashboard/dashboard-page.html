@@ -1,0 +1,181 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Welcome back, {{ firstName() }}</h1>
+      <p class="subtitle">
+        @switch (role()) {
+          @case ('CLAIMANT') {
+            Here is where your claims stand.
+          }
+          @case ('OFFICER') {
+            Your claims and the ones waiting to be picked up.
+          }
+          @default {
+            Claims across all markets and your team's capacity.
+          }
+        }
+      </p>
+    </div>
+    <a matButton="filled" class="cta" routerLink="/claims/new"><mat-icon>add</mat-icon>New claim</a>
+  </header>
+
+  @let current = claims();
+  @if (current.state === 'loading') {
+    <mat-progress-bar mode="indeterminate" aria-label="Loading dashboard" />
+    <section class="kpis" aria-hidden="true">
+      <span class="skeleton hero-skeleton"></span>
+      <div class="tiles">
+        @for (n of placeholders; track n) {
+          <span class="skeleton tile-skeleton"></span>
+        }
+      </div>
+    </section>
+  } @else if (current.state === 'error') {
+    <section class="surface-card">
+      <app-state-message
+        kind="error"
+        title="Couldn't load your claims"
+        [message]="current.problem.message"
+        [retryable]="true"
+        (retry)="retry()"
+      />
+    </section>
+  } @else {
+    <section class="kpis" aria-label="Claims by status">
+      <a class="hero surface-card" routerLink="/claims">
+        <mat-icon class="hero-art" aria-hidden="true">description</mat-icon>
+        <span class="hero-label">{{
+          role() === 'CLAIMANT' ? 'Your claims' : 'Claims in total'
+        }}</span>
+        <span class="hero-value">{{ total() }}</span>
+        <span class="hero-link"
+          >View all <mat-icon aria-hidden="true">arrow_forward</mat-icon></span
+        >
+      </a>
+      <div class="tiles">
+        @for (status of statuses; track status) {
+          <a
+            class="tile surface-card"
+            [class.zero]="counts()[status] === 0"
+            [style.--tile-color]="tileColor(status)"
+            routerLink="/claims"
+            [queryParams]="{ status }"
+          >
+            <span class="tile-value">{{ counts()[status] }}</span>
+            <app-status-chip [status]="status" />
+          </a>
+        }
+      </div>
+    </section>
+
+    <div class="columns">
+      @switch (role()) {
+        @case ('CLAIMANT') {
+          <section class="surface-card" aria-labelledby="reply-heading">
+            <h2 id="reply-heading" class="section-title">Waiting for your reply</h2>
+            <app-claim-mini-list
+              [claims]="needsReply()"
+              emptyText="Nothing needs your reply right now."
+            />
+          </section>
+          <section class="surface-card" aria-labelledby="recent-heading">
+            <h2 id="recent-heading" class="section-title">Recent activity</h2>
+            <app-claim-mini-list
+              [claims]="recent()"
+              emptyText="You haven't filed any claims yet."
+            />
+          </section>
+        }
+        @case ('OFFICER') {
+          <section class="surface-card" aria-labelledby="mine-heading">
+            <h2 id="mine-heading" class="section-title">Your active claims</h2>
+            <app-claim-mini-list
+              [claims]="first(myActive())"
+              emptyText="You have no claims in progress."
+            />
+            @if (myActive().length > sectionSize) {
+              <a class="more" routerLink="/claims" [queryParams]="{ officer: user()?.id }"
+                >See all {{ myActive().length
+                }}<mat-icon aria-hidden="true">arrow_forward</mat-icon></a
+              >
+            }
+          </section>
+          <section class="surface-card" aria-labelledby="queue-heading">
+            <h2 id="queue-heading" class="section-title">Waiting to be picked up</h2>
+            <app-claim-mini-list
+              [claims]="first(unassigned())"
+              [emptyText]="
+                total() === 0
+                  ? 'No claims have been filed yet.'
+                  : 'No unassigned claims. The queue is clear.'
+              "
+            />
+            @if (unassigned().length > sectionSize) {
+              <a
+                class="more"
+                routerLink="/claims"
+                [queryParams]="{ status: 'OPEN', unassigned: true }"
+                >See all {{ unassigned().length
+                }}<mat-icon aria-hidden="true">arrow_forward</mat-icon></a
+              >
+            }
+          </section>
+          @if (myWorkload(); as mine) {
+            <section class="surface-card" aria-labelledby="capacity-heading">
+              <h2 id="capacity-heading" class="section-title">Your capacity</h2>
+              <app-workload-meter [workload]="mine" />
+            </section>
+          }
+        }
+        @case ('MANAGER') {
+          <section class="surface-card" aria-labelledby="assign-heading">
+            <h2 id="assign-heading" class="section-title">Needs an officer</h2>
+            <app-claim-mini-list
+              [claims]="first(unassigned())"
+              [emptyText]="
+                total() === 0
+                  ? 'No claims have been filed yet.'
+                  : 'Every open claim has an officer.'
+              "
+            />
+            @if (unassigned().length > sectionSize) {
+              <a
+                class="more"
+                routerLink="/claims"
+                [queryParams]="{ status: 'OPEN', unassigned: true }"
+                >See all {{ unassigned().length
+                }}<mat-icon aria-hidden="true">arrow_forward</mat-icon></a
+              >
+            }
+          </section>
+          <section class="surface-card" aria-labelledby="team-heading">
+            <h2 id="team-heading" class="section-title">Team workload</h2>
+            @let team = workload();
+            @if (team.state === 'ready') {
+              @if (team.data.length === 0) {
+                <p class="muted">No active officers.</p>
+              } @else {
+                <ul class="team">
+                  @for (officer of team.data; track officer.officerId) {
+                    <li>
+                      <app-avatar [name]="officer.fullName" />
+                      <div class="team-body">
+                        <span class="name">{{ officer.fullName }}</span>
+                        <app-workload-meter [workload]="officer" />
+                      </div>
+                    </li>
+                  }
+                </ul>
+                <a class="more" routerLink="/workload"
+                  >Open workload<mat-icon aria-hidden="true">arrow_forward</mat-icon></a
+                >
+              }
+            } @else if (team.state === 'error') {
+              <p class="muted">{{ team.problem.message }}</p>
+            }
+          </section>
+        }
+      }
+    </div>
+  }
+</div>

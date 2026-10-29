@@ -1,0 +1,144 @@
+<main class="login">
+  <aside class="showcase" aria-label="About Claims Management">
+    <div class="orb orb-a" aria-hidden="true"></div>
+    <div class="orb orb-b" aria-hidden="true"></div>
+
+    <div class="showcase-top">
+      <app-brand-mark />
+      <span class="wordmark">Claims Management</span>
+    </div>
+
+    <div class="pitch">
+      <span class="eyebrow">APAC claims platform</span>
+      <p class="headline">Claims resolved with clarity and control.</p>
+      <p class="lede">
+        A single, secure workspace where claimants, officers and managers file, assess and settle
+        claims together, across six APAC markets.
+      </p>
+
+      <ul class="features">
+        <li>
+          <mat-icon aria-hidden="true">insights</mat-icon>
+          <span>Live status on every claim</span>
+        </li>
+        <li>
+          <mat-icon aria-hidden="true">group_work</mat-icon>
+          <span>Workflows built for each role</span>
+        </li>
+        <li>
+          <mat-icon aria-hidden="true">history</mat-icon>
+          <span>A complete audit trail</span>
+        </li>
+      </ul>
+    </div>
+
+    <div class="preview" aria-hidden="true">
+      <div class="preview-head">
+        <span class="sample">Sample claim</span>
+        <span class="number">CLM-2026-000042</span>
+      </div>
+      <p class="preview-title">Motor · Singapore</p>
+      <ol class="steps">
+        <li class="done">
+          <span class="dot"><mat-icon>check</mat-icon></span
+          >Submitted
+        </li>
+        <li class="done">
+          <span class="dot"><mat-icon>check</mat-icon></span
+          >Assigned
+        </li>
+        <li class="now"><span class="dot"></span>Under review</li>
+        <li><span class="dot"></span>Decision</li>
+      </ol>
+      <div class="progress"><span></span></div>
+    </div>
+
+    <p class="showcase-foot">&copy; {{ year }} Claims Management</p>
+  </aside>
+
+  <section class="panel">
+    <div class="form-wrap">
+      <header class="heading">
+        <h1>Welcome back</h1>
+        <p class="muted">Sign in to your claims workspace</p>
+      </header>
+
+      @if (notice(); as message) {
+        <div class="notice" role="status">
+          <mat-icon aria-hidden="true">info</mat-icon>
+          <span>{{ message }}</span>
+        </div>
+      }
+      @if (error(); as message) {
+        <div class="inline-error" role="alert">
+          <mat-icon aria-hidden="true">error_outline</mat-icon>
+          <span>{{ message }}</span>
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <mat-form-field appearance="outline">
+          <mat-label>Username</mat-label>
+          <mat-icon matPrefix aria-hidden="true">person</mat-icon>
+          <input matInput formControlName="username" autocomplete="username" />
+          @if (form.controls.username.hasError('required')) {
+            <mat-error>Enter your username</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Password</mat-label>
+          <mat-icon matPrefix aria-hidden="true">lock</mat-icon>
+          <input
+            matInput
+            formControlName="password"
+            autocomplete="current-password"
+            [type]="hidePassword() ? 'password' : 'text'"
+          />
+          <button
+            matIconButton
+            matSuffix
+            type="button"
+            [attr.aria-label]="hidePassword() ? 'Show password' : 'Hide password'"
+            [attr.aria-pressed]="!hidePassword()"
+            (click)="hidePassword.set(!hidePassword())"
+          >
+            <mat-icon>{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
+          </button>
+          @if (form.controls.password.hasError('required')) {
+            <mat-error>Enter your password</mat-error>
+          }
+        </mat-form-field>
+
+        <button matButton="filled" type="submit" class="submit" [disabled]="submitting()">
+          @if (submitting()) {
+            <mat-progress-spinner mode="indeterminate" diameter="20" aria-label="Signing in" />
+          }
+          {{ submitting() ? 'Signing in…' : 'Sign in' }}
+          @if (!submitting()) {
+            <mat-icon iconPositionEnd>arrow_forward</mat-icon>
+          }
+        </button>
+      </form>
+
+      @if (demoAccounts.length > 0) {
+        <div class="demo">
+          <p class="divider"><span>Demo accounts · development only</span></p>
+          <div class="demo-buttons">
+            @for (account of demoAccounts; track account.username) {
+              <button matButton="tonal" type="button" (click)="useDemo(account)">
+                <mat-icon>{{ account.icon }}</mat-icon>
+                {{ account.label }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      <p class="assurance">
+        <mat-icon aria-hidden="true">lock_outline</mat-icon>
+        Secure sign-in. Your session ends automatically.
+      </p>
+    </div>
+  </section>
+</main>

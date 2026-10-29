@@ -1,0 +1,86 @@
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  .icon-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+
+  .label {
+    display: block;
+    color: var(--app-muted);
+    font: var(--mat-sys-label-large);
+  }
+
+  .value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 750;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 20px;
+}
+
+.officer {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+
+  &.me {
+    border-color: var(--mat-sys-primary);
+    box-shadow:
+      0 0 0 1px var(--mat-sys-primary),
+      var(--app-shadow-sm);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    --avatar-size: 44px;
+  }
+
+  h2 {
+    font: var(--mat-sys-title-medium);
+    font-weight: 650;
+  }
+
+  p {
+    margin: 2px 0 0;
+  }
+
+  a {
+    align-self: flex-start;
+    margin-left: -8px;
+  }
+}
+
+.you {
+  margin-left: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--mat-sys-primary-container);
+  color: var(--mat-sys-on-primary-container);
+  font: var(--mat-sys-label-small);
+  font-weight: 700;
+  vertical-align: middle;
+}
