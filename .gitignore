@@ -1,33 +1,11 @@
-target/
-.idea/
-*.iml
-.vscode/
-*.log
+# Repository root for the whole Chubb project: backend-claim-management/ and frontend/ each keep their own .gitignore
+# (build output, node_modules, IDE files of their own). These are the things that only exist at this level.
 
-### IntelliJ IDEA ###
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-.kotlin
+# IntelliJ project of this folder
+/.idea/
+/*.iml
+/out/
 
-### Eclipse ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### Mac OS ###
-.DS_Store
+# Stray Playwright output when a test run starts from here instead of from frontend/
+/test-results/
+/playwright-report/
