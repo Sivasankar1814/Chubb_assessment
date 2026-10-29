@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 780" width="1040" height="780" role="img" aria-label="Claim status flow: a claim moves OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, SETTLED, CLOSED. An officer or manager asking for more information puts it ON_HOLD, where only the claimant's reply resumes review and staff can only close it. A rejected claim can be closed, and a claim can be closed early.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 780" width="1040" height="780" role="img" aria-label="Claim status flow: a claim moves OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, SETTLED, CLOSED. An officer or manager asking for more information puts it ON_HOLD, where only the claimant's reply resumes review and staff can only close it. A rejected claim can be closed, and a claim can be closed early. A manager can also move an OPEN claim straight to UNDER_REVIEW, with no officer assigned.">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#0b1220"/>
@@ -13,6 +13,9 @@
     <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
       <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
     </marker>
+    <marker id="ahSky" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#38bdf8"/>
+    </marker>
     <marker id="ahAmber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.4" markerHeight="5.4" orient="auto">
       <path d="M0 0 L10 5 L0 10 z" fill="#f59e0b"/>
     </marker>
@@ -25,6 +28,7 @@
     <!-- title -->
     <text x="40" y="44" font-size="24" font-weight="700" fill="#f8fafc">Claim status flow</text>
     <text x="40" y="68" font-size="13" fill="#cbd5e1">8 statuses. Asking for more information puts a claim ON_HOLD; only the claimant's reply resumes it.</text>
+    <text x="40" y="88" font-size="13" fill="#cbd5e1">A manager can review an OPEN claim directly, with no officer. An officer picks it up first, which assigns it.</text>
 
     <!-- legend: only encodings that repeat -->
     <line x1="40" y1="108" x2="84" y2="108" stroke="#f59e0b" stroke-width="3" marker-end="url(#ahAmber)"/>
@@ -33,6 +37,8 @@
     <text x="96" y="142" font-size="12" fill="#cbd5e1">staff close a claim early or withdraw it</text>
     <circle cx="62" cy="168" r="6" fill="#2dd4bf"/>
     <text x="96" y="172" font-size="12" fill="#cbd5e1">counts toward the officer's workload</text>
+    <line x1="40" y1="198" x2="84" y2="198" stroke="#38bdf8" stroke-width="3" marker-end="url(#ahSky)"/>
+    <text x="96" y="202" font-size="12" fill="#cbd5e1">manager only: review without an officer</text>
 
     <!-- transitions: main path -->
     <g stroke="#94a3b8" stroke-width="2" fill="none" marker-end="url(#ah)">
@@ -49,7 +55,7 @@
       <text x="534" y="407">approve</text>
       <text x="534" y="517">settle</text>
       <text x="534" y="627">close</text>
-      <text x="695" y="340" text-anchor="middle">reject + remarks</text>
+      <text x="695" y="367" text-anchor="middle">reject + remarks</text>
     </g>
 
     <!-- transitions: the hold -->
@@ -62,6 +68,14 @@
       <text x="345" y="315">asks + remarks</text>
       <text x="345" y="392">only the claimant</text>
       <text x="345" y="407">replies + remarks</text>
+    </g>
+
+    <!-- transition: a manager reviews an open claim directly, skipping ASSIGNED -->
+    <path d="M620 146 H760 V332 H620" stroke="#38bdf8" stroke-width="3" fill="none" marker-end="url(#ahSky)"/>
+    <g font-size="12" fill="#7dd3fc">
+      <text x="770" y="172">manager only:</text>
+      <text x="770" y="187">review directly,</text>
+      <text x="770" y="202">no officer</text>
     </g>
 
     <!-- transitions into CLOSED -->

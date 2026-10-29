@@ -1,31 +1,57 @@
-# Architecture – Chubb APAC Backend Claim Management
+# Architecture – Chubb APAC Claims Management
 
-How the system is put together and why. For setup, configuration, demo users and an API walkthrough see
-[README.md](README.md); for the rules to follow when changing code see [CLAUDE.md](CLAUDE.md).
+How the whole application is put together and why: the Angular web app, the Spring Boot microservices behind it, and the
+contracts between the two. For setup, configuration, demo users and an API walkthrough see [README.md](README.md); for the
+rules to follow when changing code see [CLAUDE.md](CLAUDE.md); for how the system was built with AI assistance, and what
+that taught, see [Ai_journal.md](Ai_journal.md).
 
-The pictures are in `docs/` (SVG, each with a 2x PNG export; the technology-stack banner is in the README). The remaining
-diagrams use [Mermaid](https://mermaid.js.org/), which GitHub renders inline.
+The pictures are in `docs/` (SVG, each with a 2x PNG export; the technology-stack banner and the screenshots are in the
+README). The remaining diagrams use [Mermaid](https://mermaid.js.org/), which GitHub renders inline.
+
+**Contents**
+
+| Part | Sections |
+|------|----------|
+| The whole system | [1 Overview](#1-overview) · [2 System context](#2-system-context) · [20 End-to-end flows](#20-end-to-end-flows) · [21 Frontend and backend contracts](#21-frontend-and-backend-contracts) · [22 Design decisions and trade-offs](#22-design-decisions-and-trade-offs) · [23 Known limitations](#23-known-limitations) |
+| Backend (Spring Boot) | [3 Modules](#3-modules) · [4 Request flow](#4-request-flow) · [5 Security](#5-security) · [6 Data](#6-data) · [7 Claim lifecycle and business rules](#7-claim-lifecycle-and-business-rules) · [8 Workload calculation](#8-workload-calculation) · [9 Cross-cutting concerns](#9-cross-cutting-concerns-common) · [10 Backend testing](#10-backend-testing) |
+| Web app (Angular) | [11 Overview and structure](#11-frontend-overview-and-structure) · [12 Routing and guards](#12-frontend-routing-guards-and-role-aware-ui) · [13 Sign-in and session](#13-frontend-sign-in-and-session) · [14 HTTP layer and errors](#14-frontend-http-layer-and-errors) · [15 Data, state and forms](#15-frontend-data-loading-state-and-forms) · [16 Rules the screen mirrors](#16-frontend-rules-the-screen-mirrors) · [17 Design system](#17-frontend-design-system-responsive-layout-and-accessibility) · [18 Testing](#18-frontend-testing) · [19 Delivery](#19-frontend-delivery) |
 
 ## 1. Overview
 
-A small microservice system for filing, assigning and tracking insurance claims. Four deployable Spring Boot
-applications share one Maven build and one library:
+A claims platform for filing, assigning and tracking insurance claims across six APAC markets. A claimant files a claim, a
+manager assigns it to an officer with spare capacity, and the officer works it through a status workflow that keeps a full
+audit trail. It is two deployable halves in one repository:
 
-* Java 21, Spring Boot 3.3.5, Spring Cloud 2023.0.3 (Gateway, OpenFeign), Spring Security (JWT resource server),
-  Spring Data JPA, springdoc-openapi 2.6.0.
+* **Web app** (`frontend/`): an Angular 22 single-page app (Angular Material 3, standalone components, signals, zoneless
+  change detection). It talks to the backend only through the gateway, with a relative `/api` base, so the browser sees one
+  origin and no CORS is configured anywhere.
+* **Backend** (`backend-claim-management/`): four deployable Spring Boot applications (gateway, user, claim, workload) that
+  share one Maven build and one library. Java 21, Spring Boot 3.3.5, Spring Cloud 2023.0.3 (Gateway, OpenFeign), Spring
+  Security (JWT resource server), Spring Data JPA, springdoc-openapi 2.6.0.
+
+What holds across both halves:
+
+* **The server is the authority.** The web app mirrors a few rules (the claim workflow, the currency of a market, a policy
+  number preview) only to decide what to offer; the services enforce every rule, and a 403 or 409 always wins (section 21).
 * **Synchronous REST only.** No message broker, no service registry, no shared database.
-* **Stateless services.** Identity travels in a signed JWT; nothing is kept in an HTTP session.
+* **Stateless services.** Identity travels in a signed JWT; nothing is kept in an HTTP session. The browser keeps the token in
+  `sessionStorage` for the life of a tab (section 13).
 * Data is in-memory H2 by default (resets on restart) and can be switched to MySQL per service.
 
 ## 2. System context
 
-![System architecture: a client talks only to the api-gateway on port 8080, which routes by path to user-service (8081), claim-service (8083) and workload-service (8084); services call each other directly through Feign](docs/system-architecture.svg)
+![System architecture: the Angular web app (port 4200 in development, nginx in production) and any REST client such as Swagger UI talk only to the api-gateway on port 8080, which routes by path to user-service (8081), claim-service (8083) and workload-service (8084); services call each other directly through Feign](docs/system-architecture.svg)
 
 The picture is `docs/system-architecture.svg` (2x export: `docs/system-architecture.png`). The same system as a Mermaid diagram:
 
 ```mermaid
 flowchart LR
-    client(["Client / Swagger UI"])
+    browser(["Browser<br/>Angular web app"])
+    client(["Swagger UI / REST client"])
+
+    subgraph web["Web tier"]
+        spa["Dev server :4200<br/>or nginx in production<br/>serves the app, proxies /api"]
+    end
 
     subgraph edge["Edge - reactive (WebFlux)"]
         gw["api-gateway :8080<br/>Spring Cloud Gateway"]
@@ -40,6 +66,8 @@ flowchart LR
     userdb[("userdb / user_db")]
     claimdb[("claimdb / claim_db")]
 
+    browser -->|"app and /api, one origin"| spa
+    spa -->|"/api, Bearer JWT"| gw
     client --> gw
     gw -->|"/api/users/**, /api/auth/**"| user
     gw -->|"/api/claims/**"| claim
@@ -51,8 +79,9 @@ flowchart LR
     claim --- claimdb
 ```
 
-Clients only ever talk to the gateway. Service-to-service calls go directly between services (not back through the
-gateway) using OpenFeign at fixed URLs.
+Clients only ever talk to the gateway. The browser loads the app and calls `/api` on a single origin: in development the
+Angular dev server proxies `/api` to the gateway (`proxy.conf.json`), in production nginx does (section 19). Service-to-service
+calls go directly between services (not back through the gateway) using OpenFeign at fixed URLs.
 
 ## 3. Modules
 
@@ -63,6 +92,7 @@ gateway) using OpenFeign at fixed URLs.
 | `claim-service` | 8083 | MVC, JPA, `common` | `claims`, `claim_history` | Claim submission, assignment, status workflow, audit history, per-officer open-claim counts. Seeds demo claims. |
 | `workload-service` | 8084 | MVC, `common` | nothing (stateless) | Utilisation per officer and next-assignee suggestion, computed live from the two services above. |
 | `common` | – | plain jar | – | Shared auto-configuration: JWT validation and method security, global exception handler, Feign auth forwarding, OpenAPI bearer scheme. |
+| `frontend` (not a Maven module) | 4200 in development; 8080 inside its Docker image | Angular 22, Material 3, TypeScript | nothing (a stateless client; the session lives in the browser's `sessionStorage`) | The web UI for all three roles. Calls only `/api` through the gateway. Described in sections 11 to 19. |
 
 Dependencies between services, as call direction:
 
@@ -77,14 +107,15 @@ them fail with 502 until they are up.
 
 ### Package structure
 
-Every service uses package-by-layer: `controller → service → repository → entity`, with `dto` records for request and
-response bodies. Controllers never touch repositories. The directory tree is in the README.
+Every backend service uses package-by-layer: `controller → service → repository → entity`, with `dto` records for request
+and response bodies. Controllers never touch repositories. The directory tree is in the README.
 
 * `user-service`: the layers above plus `config`.
 * `claim-service`: the layers plus `client` (Feign), `model` (enums, state machine) and `security` (`Caller`).
 * `workload-service`: `client` (Feign) and `model` (`OfficerWorkload`).
 * `api-gateway`: the routes are in `application.yml`.
 * `common`: shared auto-configuration only (section 9).
+* `frontend`: package-by-feature rather than by layer; see section 11.
 
 ## 4. Request flow
 
@@ -153,7 +184,7 @@ in the `roles` claim become `ROLE_<name>` authorities.
 | Layer | Where | Examples |
 |-------|-------|----------|
 | Role gate | `@PreAuthorize` on controller methods (`@EnableMethodSecurity` in `common`) | assignment is `MANAGER` only; status update is `CLAIMANT`/`OFFICER`/`MANAGER` (the service narrows the claimant, see below); workload is `OFFICER`/`MANAGER` |
-| Ownership and state | service layer | a claimant sees only their own claims; officers can only update claims assigned to them (or pick up an unassigned `OPEN` one); through the status endpoint a claimant can only answer an information request on their own claim (`UNDER_REVIEW`, 403 for any other status); claimants can read only their own profile |
+| Ownership and state | service layer | a claimant sees only their own claims; officers can only update claims assigned to them (or pick up an unassigned `OPEN` one), while managers can update any claim, including reviewing an `OPEN` one with no officer; through the status endpoint a claimant can only answer an information request on their own claim (`UNDER_REVIEW`, 403 for any other status); claimants can read only their own profile; **officers can create a user of any role, `MANAGER` included** (so an officer can create an account more privileged than their own; only update and delete of users are manager-only), a deliberate product choice, not an oversight |
 
 The full endpoint-by-role table is in the README.
 
@@ -171,6 +202,15 @@ The full endpoint-by-role table is in the README.
 
 `/api/auth/login`, `/swagger-ui*`, `/v3/api-docs/**`, `/actuator/health/**`, `/actuator/info`, `/h2-console/**`, plus
 `OPTIONS`. CSRF is disabled (stateless bearer tokens, no cookies) and sessions are never created.
+
+### 5.5 What the browser adds
+
+* **No CORS.** The gateway has no CORS configuration on purpose. The web app calls a relative `/api` on its own origin and a
+  proxy (the dev server, or nginx) forwards it, so the browser never makes a cross-origin call.
+* **Token handling.** The app keeps the JWT in `sessionStorage` and sends it only on calls to its own `/api` (sections 13 and
+  14). A script on the page could read it; the Content-Security-Policy sent by nginx (section 19) is the mitigation.
+* **The UI's role checks are not security.** Guards and the `HasRole` directive only hide what the server would refuse
+  (section 12); every endpoint above is protected by the services themselves.
 
 ## 6. Data
 
@@ -200,6 +240,7 @@ erDiagram
         bigint claimant_id
         string claimant_name
         string market
+        string policy_number
         string claim_type
         decimal claim_amount
         date incident_date
@@ -231,15 +272,23 @@ erDiagram
 is a real foreign key.
 
 * **One `users` table for all roles.** The role decides which profile columns apply: claimants use `market` and
-  `policy_number`; officers use `specialization` and `max_capacity`. Create and update enforce the mandatory fields per
-  role.
+  `policy_number`, both optional; officers use `specialization` (optional, display only) and `max_capacity` (optional on
+  the API, but never empty: when omitted, create and update store the default of 5, because assignment and workload read
+  a missing capacity as 0 and the officer would be "full" for good). No profile field is mandatory for any role.
 * **Markets and claimant names.** `Market` (`SG`, `HK`, `JP`, `TH`, `IN`, `ID`) is an enum in `common`, stored by name.
-  `POST /api/claims` requires `claimantName` and `market` in the body. `ClaimService.create` compares them with the
-  claimant's `UserSummary`, already fetched through Feign (`fullName` ignoring case and spaces, `market` exactly), and
-  answers 409 on a mismatch, so a claimant cannot file into another market. The claim then stores the profile's name and
-  market (`claimant_name`, `market`) as snapshots taken at filing time. These columns are nullable in the database
-  (`ddl-auto=update` cannot add `NOT NULL` to a table that already has rows) and non-null is enforced in code: a claimant
-  without a market also gets 409 when filing. `GET /api/claims` filters by `market` and `claimType`.
+  `POST /api/claims` requires `claimantName` and `market` in the body: the market is chosen when the claim is filed, not
+  taken from the user. `ClaimService.create` compares the name with the claimant's `UserSummary`, already fetched through
+  Feign (`fullName` ignoring case and spaces), and answers 409 on a mismatch. A claimant whose profile has a market (the
+  demo claimants) can only file in it (409 otherwise); a claimant without one files in the market sent. The claim then stores
+  the profile's name and the requested market (`claimant_name`, `market`) as snapshots taken at filing time. These columns
+  are nullable in the database (`ddl-auto=update` cannot add `NOT NULL` to a table that already has rows) and non-null is
+  enforced in code. `GET /api/claims` filters by `market` and `claimType`.
+* **Policy number.** Every new claim is stored with a `policy_number` that the **server** decides when it is filed and the client can
+  neither send nor change (`ClaimService.policyNumberFor`): the claimant's own profile policy number when they have one (the seeded
+  claimants do), otherwise a generated `POL-<market>-<user id>` such as `POL-SG-0012`, stable for a person and market. It is a
+  reference, not a lookup: there are no policy records. The column is nullable (claims filed earlier have none) and is shown on
+  `GET /api/claims/{id}`, in the list and in the status-update response. The frontend previews the same rule
+  (`shared/policy-number.ts`); the two share one table of examples in their tests, so change them together.
 * **Claim numbers** have the form `CLM-<year>-<id padded to 6>` (for example `CLM-2026-000042`). The row is first saved
   with a temporary number, then renamed once the generated id exists, in the same transaction.
 * **`claim_history` is append-only.** Its columns are `updatable = false`. One row is written for every creation,
@@ -263,22 +312,25 @@ no database at all. Connection overrides and the H2 console are covered in the R
 
 The only legal moves are defined once, in `ClaimStatus.canTransitionTo`.
 
-![Claim status flow: OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, SETTLED, CLOSED; asking for more information puts a claim ON_HOLD until the claimant replies; a rejected claim is closed; a claim can be closed early](docs/claim-status-flow.svg)
+![Claim status flow: OPEN, ASSIGNED, UNDER_REVIEW, APPROVED, SETTLED, CLOSED; asking for more information puts a claim ON_HOLD until the claimant replies; a rejected claim is closed; a claim can be closed early; a manager can also move an OPEN claim straight to UNDER_REVIEW with no officer](docs/claim-status-flow.svg)
 
 The picture (`docs/claim-status-flow.svg`, with a 2x export in `docs/claim-status-flow.png`) shows who makes each move.
 
 Rules enforced in `ClaimService`:
 
-* **Submit.** A claimant files for themselves (id taken from their token). Officers and managers must give a `claimantId`,
-  which must belong to a `CLAIMANT`. New claims start `OPEN`. `claimantName` and `market` are required in the body and must
-  match the claimant's profile (section 6.1); a mismatch is 409.
+* **Submit.** A claimant files for themselves (id taken from their token). So does an officer or manager who gives no
+  `claimantId`: the claim is then in **their own name** (`claimantId` is their user id). An officer or manager who does give a
+  `claimantId` files on that person's behalf, and it must belong to a `CLAIMANT`. New claims start `OPEN`. `claimantName` and
+  `market` are required in the body and `claimantName` must match the profile of whoever the claim is for (section 6.1); a
+  mismatch is 409. A staff-owned claim has two consequences nobody has addressed: staff can still approve or settle a claim they
+  filed themselves (no segregation of duties), and if it goes `ON_HOLD` only a claimant can reply, so staff can only close it.
 * **Assign / reassign** (manager only). Allowed while the claim is `OPEN`, `ASSIGNED`, `UNDER_REVIEW` or `ON_HOLD`. The target must
   be an **active `OFFICER`** user, not already the assignee, with `open claims < maxCapacity`. Status moves `OPEN →
   ASSIGNED`; reassigning keeps the current status.
 * **Status change** (officer or manager). `ASSIGNED` cannot be set through the status endpoint, only by assignment. Officers
   may update a claim assigned to them, or pick up an unassigned `OPEN` claim (self-assigns, capacity-checked, writes an
   `ASSIGNED` history row first). A claim assigned to a different officer returns 403 "Claim is not assigned to
-  you". Managers may update any claim. `REJECTED` and `ON_HOLD` require `remarks`.
+  you". Managers may update any claim. A manager may also move an `OPEN` claim straight to `UNDER_REVIEW` with no officer (the blue arrow in the picture): the claim stays unassigned and counts towards nobody's workload, the history records the manager, and from there the manager can request information, approve, reject, settle and close it, or assign an officer at any point (a first assignment that keeps the status). An officer cannot act on such a claim: it is not `OPEN` and has no officer, so they get the same 403 "Claim is not assigned to you". `REJECTED` and `ON_HOLD` require `remarks`.
 * **Request more information** (officer on their own claim, or manager). Moving a claim from `UNDER_REVIEW` to
   `ON_HOLD` through the status endpoint stores the remarks as the request (`info_request_message`, `info_requested_by`,
   `info_requested_at`) and writes an `INFO_REQUESTED` history row. The claim JSON shows it as `infoRequest` (`message`, `requestedBy`, `requestedAt`) while it is open, so the claimant sees
@@ -360,9 +412,9 @@ One JSON shape everywhere: `timestamp`, `status`, `error`, `message`, `path`, `d
 The 401 for a **missing or expired token** is written by the security filter before MVC is reached, so it has a slimmer
 body: `status`, `error`, `message` only, with a hint to log in again.
 
-## 10. Testing
+## 10. Backend testing
 
-JUnit 5, Mockito and AssertJ; run with the build.
+JUnit 5, Mockito and AssertJ; run with the build. The web app's tests are in section 18.
 
 | Module | Tests |
 |--------|-------|
@@ -373,11 +425,270 @@ JUnit 5, Mockito and AssertJ; run with the build.
 
 `workload-service` has no controller-level tests.
 
-## 11. Design decisions and trade-offs
+## 11. Frontend: overview and structure
+
+The web app is an Angular single-page application in `frontend/`.
+
+| | |
+|---|---|
+| Framework | Angular 22: standalone components, signals, zoneless change detection, the `@if` / `@for` / `@let` control flow, `input()` / `output()` |
+| UI | Angular Material 3 and the CDK, plus a design system of CSS variables in `src/styles.scss` (section 17) |
+| Language and data | TypeScript 6 in strict mode; RxJS 7 for HTTP and form streams |
+| Tests | Vitest for unit tests, Playwright for end-to-end tests against the real stack (section 18) |
+| Quality | ESLint with angular-eslint (including the template accessibility rules) and Prettier |
+| Runtime | Node.js 22.22.3+, 24.15+ or 26+ for the CLI; `ng serve` in development, nginx in production (section 19) |
+
+```
+frontend/src/app
+├─ core/       singletons: auth (session, guards), http (interceptors, error parsing), config, notifications, theme
+├─ models/     TypeScript shapes of the backend's DTOs and enums, and the currency table
+├─ layout/     the shell: toolbar and side navigation
+├─ features/   auth, dashboard, claims, workload, profile, errors, users (each lazy-loaded)
+├─ shared/     brand mark, avatar, status chip, workload meter, state message, confirm dialog, pipes,
+│              validators, role directive, dates, money, policy number, load-state
+└─ testing/    test helpers (a fake JWT)
+```
+
+| Feature | What it holds |
+|---------|---------------|
+| `auth` | The login page: a split screen that fits one window, with demo-account buttons in development builds only |
+| `dashboard` | A summary per role: a claimant's own claims; staff see every claim, what needs an officer, and capacity |
+| `claims` | The claims list (filters, assign button on each row for managers), the claim page (details, history timeline, actions), the new-claim form, and the status and assign dialogs; `claim-workflow.ts` holds the move rules the screen mirrors |
+| `workload` | Officers' open claims against capacity, least utilised first (staff only) |
+| `users` | The users list and the New user form (staff only), and `UserDirectory`, a staff-only cache that turns user ids into names |
+| `profile`, `errors` | The signed-in user's profile; the "no access" and "not found" pages |
+
+A feature talks to the backend only through its own API service (`claims-api`, `users-api`, `workload-api`) or `AuthService`;
+components never use `HttpClient` directly.
+
+## 12. Frontend: routing, guards and role-aware UI
+
+Every page is loaded lazily. Routes and who may reach them:
+
+| Route | Who | Guards |
+|-------|-----|--------|
+| `/login` | anyone not signed in | `guestGuard` sends a signed-in user to the dashboard |
+| everything below, inside the shell | signed-in users | `authGuard`: loads the profile after a refresh; if it cannot, the session is dropped and the user goes to `/login` with the page they wanted |
+| `/dashboard`, `/profile` | all roles | none beyond sign-in |
+| `/claims`, `/claims/:id` | all roles | the server decides what each role sees |
+| `/claims/new` | all roles | `unsavedChangesGuard` asks before a half-filled form is thrown away |
+| `/workload` | officer, manager | `roleGuard` (`data.roles`), otherwise `/forbidden` |
+| `/users`, `/users/new` | officer, manager | `roleGuard`; `/users/new` also has the unsaved-changes guard |
+| `/forbidden`, any other path | signed-in users | the "no access" and "not found" pages |
+
+The `HasRole` directive hides controls (side navigation entries, the Assign button) from roles the server would refuse
+anyway. **Guards and `HasRole` decide only what is offered**: the services enforce the same rules on every call, and a 403
+is shown, not hidden. Route parameters arrive through component input binding (`withComponentInputBinding`), and every route
+has a page title.
+
+## 13. Frontend: sign-in and session
+
+1. The login page posts to `POST /api/auth/login`, marked as a **public request**: no token is attached and a 401 is left to
+   the page (a wrong password is not an expired session).
+2. The response holds the JWT, the roles and the lifetime. `AuthService` decodes the token only to learn when it expires,
+   and keeps `{ token, username, roles, expiresAt }` in `sessionStorage` (`TokenStorage`): it survives a refresh and dies with
+   the tab. Where storage is blocked the session lives in memory and a refresh signs the user out.
+3. The token carries the username, not the user id, so every session next reads `GET /api/users/me` into the profile signal.
+   After a refresh `authGuard` reloads it.
+4. **Timers.** Five minutes before the 120-minute expiry the app warns the user; at expiry it signs them out and goes to
+   `/login?reason=expired&returnUrl=<where they were>`. A 401 from any protected call does the same. There is no refresh token.
+5. After signing in the user returns to that page. Only same-app paths are followed (`safeReturnUrl` drops absolute and
+   protocol-relative URLs).
+6. The roles kept in the session choose what the UI shows. They are never the access check.
+
+## 14. Frontend: HTTP layer and errors
+
+The base URL is a relative `/api` (`API_BASE_URL`). Two functional interceptors run on every request, in this order:
+
+| Interceptor | Does |
+|-------------|------|
+| `authInterceptor` | Adds `Authorization: Bearer <token>` to calls to the app's own `/api`, and to nothing else; skips public requests and requests that already carry the header |
+| `errorInterceptor` | Handles the failures that are the same everywhere, then always rethrows |
+
+Who handles which failure:
+
+| Failure | Handled by |
+|---------|------------|
+| 401 on a protected call | `errorInterceptor`: signs the user out and goes to `/login` with the return URL |
+| No connection (status 0), 403, 5xx | `errorInterceptor`: a notification with the server's message, unless the call set `SKIP_ERROR_NOTIFICATION` |
+| 400 validation, 404, 409 business rule | the caller: inline in the form or dialog, with 400 field errors placed on the matching inputs (`applyFieldErrors`) |
+| Anything nobody caught | `GlobalErrorHandler`, the last resort |
+
+`toApiProblem` reads the backend's one error shape (`timestamp`, `status`, `error`, `message`, `path`, `details[]`, section 9)
+and the slimmer 401 body, so the UI shows the server's own wording.
+
+## 15. Frontend: data loading, state and forms
+
+* **State is signals.** Pages hold local state in signals and turn streams into signals with `toSignal`. `loadState()` wraps
+  one request as loading, ready or failed, so each page shows a progress bar with skeleton placeholders, an error with a
+  retry, or an empty state, never a blank page.
+* **Forms** are typed reactive forms. Validators live in `shared/validators` (not blank, not in the future, an amount whose
+  decimals follow the market's currency). A server error is attached to the control it names, and a taken username is shown
+  on the username field. The creation forms are guarded against accidental navigation.
+* **Names for ids.** A claim holds only user ids. `UserDirectory` lists the users once for staff and keeps the result, which
+  turns an officer id into a name; claimants get an empty directory and see "an officer is handling this claim".
+* **Lists** (claims) are fetched whole and filtered, sorted and paged in the browser: the API has no paging.
+
+## 16. Frontend: rules the screen mirrors
+
+The screen repeats a few server rules so it can offer only what can work, and so feedback is instant. The server re-checks
+every one.
+
+| Rule | Authority (backend) | Mirror (frontend) | Why a mirror |
+|------|---------------------|-------------------|--------------|
+| Claim workflow: legal moves and who makes them | `ClaimStatus.canTransitionTo`, `ClaimService` | `features/claims/claim-workflow.ts` (`TRANSITIONS`, `availableActions`, `canAssign`, `handledByManager`, `IN_PROGRESS`) | The claim page shows only the actions that can succeed |
+| The market decides the currency | `Market` enum; the API stores a bare amount | `models/currency.ts`, `shared/money.ts`, the `money` pipe | A claim is entered and shown in its market's currency, with no conversion |
+| Policy number | `ClaimService.policyNumberFor` | `shared/policy-number.ts` | The New claim page shows the number before submitting; the claim page shows what the server stored |
+| Field limits | Bean Validation on the DTO records | Form validators (name 100, description 1000 characters, phone pattern) | Early feedback |
+
+**The market belongs to the claim, not to a person.** The New user form asks for no market or policy number. On the New claim
+page a claimant whose profile has a market sees it locked (the backend refuses any other); everyone else, staff included,
+chooses it, and the amount field switches currency with it. **Everyone files in their own name**: the page is identical for
+claimants, officers and managers, and the request never carries a claimant id or a policy number.
+
+| Market | Currency | Decimals |
+|--------|----------|----------|
+| Singapore (SG) | SGD (S$) | 2 |
+| Hong Kong (HK) | HKD (HK$) | 2 |
+| Japan (JP) | JPY (¥) | 0, whole numbers only |
+| Thailand (TH) | THB (฿) | 2 |
+| India (IN) | INR (₹) | 2 |
+| Indonesia (ID) | IDR (Rp) | 0, whole numbers only |
+
+There is **no conversion between currencies**: the backend stores the bare amount and has no currency field or exchange
+rates, so the market says which currency an amount is in. Amounts stored before this (the demo claims) are read as being in
+their market's currency.
+
+## 17. Frontend: design system, responsive layout and accessibility
+
+* **Tokens live in `src/styles.scss`** and nowhere else: brand (`--app-brand-*`, the gradients), surfaces (`--app-canvas`,
+  `--app-card`), status and semantic colours (`--app-info`, `--app-good`, `--app-warning`, `--app-serious`, `--app-critical`,
+  `--app-neutral`), depth (`--app-shadow-*`), shape and motion (`--app-radius*`, `--app-ease`, `--app-fast`, `--app-base`).
+  Components use them; no hex or `rgb()` value appears in a component.
+* **Light and dark.** The app follows the operating system and the viewer can pin either (`ThemeService`, remembered per
+  browser). Colours switch with `light-dark()`.
+* **Same-origin assets.** Inter Variable is self-hosted (`@fontsource-variable/inter`); imagery is inline SVG or CSS. Nothing is
+  loaded from another origin, which is what lets the Content-Security-Policy be strict.
+* **Shell and breakpoints.** A side navigation and a sticky top bar; below 900px the navigation becomes an overlay drawer.
+  The claims list collapses its filters behind a button and drops to two columns at 640px. New pages are checked at 390, 820
+  and 1440px, light and dark, with nothing scrolling sideways.
+* **The login page is exactly one screen.** It is `100dvh` tall and never taller: spacing follows the window height, the brand
+  panel sheds its decoration on short windows, and only in a window too short for the form itself does the form panel scroll,
+  so the sign-in button is never out of reach.
+* **Accessibility.** The template accessibility lint rules are on; status colours always come with an icon and a word
+  (`StatusChip`, `WorkloadMeter`); there is a skip link; motion calms under `prefers-reduced-motion`.
+
+## 18. Frontend: testing
+
+| Layer | Tool | What it covers |
+|-------|------|----------------|
+| Unit | Vitest, `*.spec.ts` beside the code | API error parsing, session timing, both interceptors, the guards, the workflow rules, validators, currency and money, the policy-number rule, and the login, status, New claim and New user screens |
+| End to end | Playwright against the real stack, in the Edge that ships with Windows (`E2E_BROWSER` for Chrome, `E2E_BASE_URL` for a running build) | `access` (who sees what), `lifecycle` (one claim through every status across the three roles), `manager` (a manager runs the workflow with no officer), `currency` (the currency follows the market), `users` (registration) |
+
+The end-to-end tests file their own claims and register their own `e2e-` users (deleted again at the end), so they can be
+re-run without restarting the backend; the claims they leave behind are closed, so no officer is left at capacity, and they
+stay in the list until `claim-service` restarts. One worker runs them (the backend data is shared) with a 60-second limit per
+test. They are written against the seeded demo users: a database with different users fails any test that names a seeded one.
+
+## 19. Frontend: delivery
+
+* **Development:** `npm start` serves the app on :4200 and proxies `/api` to the gateway (`proxy.conf.json`).
+* **Build:** `npm run build` writes `dist/frontend-claims/browser`. No secrets are in the bundle; the demo-account buttons on
+  the login page exist only in development builds (`ngDevMode`).
+* **Production image:** the `Dockerfile` builds the app on Node 24 and serves it with nginx (unprivileged), which also proxies
+  `/api/` to the gateway (`API_UPSTREAM`, default `http://api-gateway:8080`), so a deployed browser still sees one origin.
+  nginx listens on 8080 inside the container; `/healthz` is the liveness probe.
+* **Headers** (`nginx/security-headers.conf`): a strict Content-Security-Policy (same-origin scripts, fonts and API; styles
+  allow `'unsafe-inline'` because Angular Material sets inline styles), `nosniff`, a referrer policy and a permissions policy.
+  Hashed assets are cached for a long time, `index.html` never, and `/api` responses are not cached. Strict-Transport-Security
+  is set where TLS ends; terminate TLS in front of nginx, because the token travels in a header.
+* **Not yet proven:** the image was written on a machine without Docker and has **not been built or run**. What was checked is
+  the production build behind the same policy and `/api` proxying (no violations; the end-to-end suite passes).
+
+```bash
+docker build -t frontend-claims .
+docker run -p 8080:8080 -e API_UPSTREAM=http://api-gateway:8080 frontend-claims
+```
+
+nginx resolves `API_UPSTREAM` at start-up, so the gateway's name must resolve when the container starts (put both on one
+compose network).
+
+## 20. End-to-end flows
+
+### 20.1 Signing in
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant W as Angular app
+    participant GW as api-gateway
+    participant US as user-service
+
+    U->>W: username and password
+    W->>GW: POST /api/auth/login (public request, no token)
+    GW->>US: forward unchanged
+    US-->>W: 200 accessToken, roles, expiresInSeconds
+    W->>W: keep the session in sessionStorage, arm the expiry timers
+    W->>GW: GET /api/users/me (Bearer JWT)
+    GW->>US: forward unchanged
+    US-->>W: profile (id, name, market, policy number, ...)
+    W-->>U: the dashboard for their role
+```
+
+### 20.2 Filing a claim
+
+The same page and the same request for a claimant, an officer and a manager.
+
+```mermaid
+sequenceDiagram
+    actor U as Claimant, officer or manager
+    participant W as Angular app
+    participant GW as api-gateway
+    participant C as claim-service
+    participant US as user-service
+
+    U->>W: choose the market, fill in the incident, submit
+    W->>W: validate (required fields, amount decimals for the market)
+    W->>GW: POST /api/claims (claimantName, market, type, amount, ...; no claimantId, no policy number)
+    GW->>C: forward unchanged
+    C->>C: validate the JWT locally, check the role
+    C->>US: GET /api/users/by-username/{caller} (Feign, same token)
+    US-->>C: caller's profile (id, name, market?, policyNumber?)
+    C->>C: name matches the profile, market allowed, policyNumberFor(profile, market)
+    C->>C: save the claim as OPEN and append the CREATED history row
+    C-->>W: 201 claim (claimNumber, policyNumber)
+    W-->>U: the claim page
+```
+
+### 20.3 A manager assigns a claim
+
+The sequence between the services is in section 4.2. On screen: the claims list shows an **Assign** button on each row (and
+the claim page has one) that opens the officer picker with each officer's live workload and a suggestion from
+`GET /api/workload/suggestion`; officers at capacity cannot be picked. The picker sends the `PUT` in section 4.2 and the
+list updates from the response. A manager can also skip assignment and start the review themselves on an open claim
+(section 7).
+
+## 21. Frontend and backend contracts
+
+The two halves agree on these things. Where one side holds a copy of a rule, the server is the authority and the test named
+here keeps the copies equal. **Change both sides in one change, and update this table.**
+
+| Contract | Backend | Frontend | What keeps them equal |
+|----------|---------|----------|-----------------------|
+| Claim workflow | `ClaimStatus.canTransitionTo`, `ClaimService` | `claim-workflow.ts` | Tests on both sides; the server re-checks every move |
+| Policy number | `ClaimService.policyNumberFor` | `shared/policy-number.ts` | One table of examples in `ClaimServiceTest` and `policy-number.spec.ts` |
+| Markets and currencies | `Market` enum (SG HK JP TH IN ID) | `MARKETS`, `models/currency.ts` | The currency end-to-end spec and the unit tests |
+| Roles | `Role` enum, `@PreAuthorize`, service rules | `ROLES`, `roleGuard`, `HasRole` | The UI only hides; the server enforces, and the access end-to-end spec checks both |
+| DTO shapes and enums | Request and response records, enums | `models/*.ts` | Review when either changes; the end-to-end specs exercise them |
+| Errors | The `ApiError` JSON shape (section 9) | `toApiProblem` | `api-problem.spec.ts` |
+| Token | HS256 JWT with `roles` and `exp` | `AuthService` decodes `exp` only | Session tests; the server validates the token itself |
+| Officer default capacity | `UserService.DEFAULT_OFFICER_CAPACITY` (5) | The sentence "up to 5 open at a time" on the New user page | By hand: update the sentence if the constant changes |
+
+## 22. Design decisions and trade-offs
 
 | Decision | Benefit | Cost |
 |----------|---------|------|
-| **Database per service**, soft references by id | Services can change and scale independently; no shared-schema coupling | No foreign keys across services; id lookups need a Feign call; see 12.2 |
+| **Database per service**, soft references by id | Services can change and scale independently; no shared-schema coupling | No foreign keys across services; id lookups need a Feign call; see 23.2 |
 | **One user service for all roles** | One login, one identity, one place for roles and capacity; claim and workload read officer data from the same source | The `users` table has role-specific nullable columns |
 | **Stateless JWT, validated locally** | No per-request call to the auth service; any service can authorise on its own | No revocation or refresh tokens; a token is valid until it expires; every service needs the same secret |
 | **Gateway routes but does not authenticate** | Gateway stays thin; each service stays safe even if reached directly | A bad request travels one hop before it is rejected; auth rules exist only in the services |
@@ -385,12 +696,32 @@ JUnit 5, Mockito and AssertJ; run with the build.
 | **Caller's token forwarded on Feign calls** | Original role enforced end to end; no service accounts to manage | A service can only do what the end user may do; background or system-initiated calls would need a different mechanism |
 | **Shared `common` library as auto-configuration** | One place for security, errors and OpenAPI; services add nothing to adopt it | Changes to `common` require rebuilding every service |
 | **Workload computed live** | Always consistent with the claims; nothing to keep in sync | Two synchronous calls per request; no caching |
+| **One origin: the dev proxy and nginx forward `/api`** | No CORS anywhere; the token never crosses an origin | The gateway cannot be called straight from a browser on another origin; the proxy is part of every environment |
+| **Token in `sessionStorage`, no refresh token** | Survives a refresh, dies with the tab; nothing to rotate; matches the stateless backend | Readable by any script on the page (the CSP is the mitigation); the session ends at expiry after a five-minute warning |
+| **Standalone components, signals, zoneless** | Small, explicit change detection; fast tests; no zone.js | Newer idioms; every async result must land in a signal or observable the template reads |
+| **The UI mirrors a few server rules** (workflow, currency, policy preview) | Screens offer only what can work; instant feedback | Two copies of each rule, kept equal by shared test tables (section 21) |
+| **Lazy-loaded routes** | A small first download | Each first visit to a page fetches one more chunk |
+| **Design tokens in one file, Material 3 underneath** | One look, dark mode for free, no hard-coded colours | The theme lives in a single stylesheet that everyone edits |
 
-## 12. Known limitations
+### Product decisions that shaped the model
+
+Each of these was chosen deliberately, several of them against the first design, and each is recorded where it lives.
+
+| Decision | Why | Where it lives |
+|----------|-----|----------------|
+| **A claim's market is chosen when it is filed, not stored on the user** | A person can file in more than one market, and a new user should need nothing more than a name and a login | `Claim.market`; optional `users.market`; a profile that has one still locks it (sections 6.1 and 16) |
+| **Everyone files in their own name**, officers and managers included | One screen and one request for every role, with no claimant picker | `ClaimService.resolveClaimant` (section 7); `claim-create-page` |
+| **Officers may create users of any role, `MANAGER` included** | A product choice. It means an officer can create an account more privileged than their own | `UserService.create` has no caller check; section 5.2 |
+| **An officer gets a default capacity of 5 when none is given** | Capacity runs assignment and workload; a missing one reads as 0 and the officer would be "full" for good | `UserService.DEFAULT_OFFICER_CAPACITY`; the New user page asks for nothing |
+| **The policy number is decided by the server** | Nobody types it, and it cannot be faked | `ClaimService.policyNumberFor`; preview in `shared/policy-number.ts` (section 16) |
+| **A manager can work a claim with no officer** | A manager is not blocked on assignment | `ClaimStatus` allows `OPEN` to `UNDER_REVIEW` (section 7) |
+| **The currency follows the market, with no conversion** | The API has no currency or rates | `models/currency.ts` (section 16) |
+
+## 23. Known limitations
 
 Fine for a local demo; address before production.
 
-### 12.1 Security
+### 23.1 Security
 
 * The default JWT secret is in the source. Set `CHUBB_SECURITY_JWT_SECRET` (same value in user, claim and workload).
 * `/h2-console/**` is on the public path list of every service and the H2 console is enabled by default. Disable both
@@ -400,7 +731,7 @@ Fine for a local demo; address before production.
 * Demo credentials are seeded on first start; set `chubb.seed-demo-users=false` and `chubb.seed-demo-claims=false` in
   production (the demo claims reference the demo user ids).
 
-### 12.2 Data and consistency
+### 23.2 Data and consistency
 
 * **Capacity check is not atomic.** `assign` and officer pick-up count open claims, then save, with no row lock or
   `@Version`. Two concurrent assignments to an officer one claim below capacity can both succeed and exceed it.
@@ -494,14 +825,27 @@ Fine for a local demo; address before production.
   set `DB_URL` globally, both services point at the same database and database-per-service is lost; set it per
   process.
 
-### 12.3 Resilience and operations
+### 23.3 Resilience and operations
 
 * No retries, circuit breakers or bulkheads, and no explicit Feign timeouts (Feign defaults apply). A slow `user-service`
   slows every service that calls it, and `workload-service` fails as a whole if either dependency fails.
 * No distributed tracing, metrics beyond actuator health/info, or centralised logging.
 * Each service is a single instance; the gateway has no load balancing.
 
-### 12.4 Where this is likely to grow
+### 23.4 Frontend
+
+* The claims list is fetched whole and sorted, filtered and paged in the browser; the API has no paging.
+* The JWT is readable by any script on the page (the backend offers no httpOnly cookie); the Content-Security-Policy is the
+  mitigation. There is no refresh token, so a session ends at the token's expiry.
+* The Docker image has not been built or run (section 19).
+* A claim holds only an officer id. Staff see names (they may list users); claimants see "an officer is handling this claim".
+* Claims filed by staff in their own name: staff can still approve or settle a claim they filed themselves, and one put
+  `ON_HOLD` can only be closed (section 7).
+* Editing, deactivating and deleting users, and editing a claim, are not in the app (the API has no claim editing, and user
+  changes are manager-only API calls).
+* The end-to-end suite is written against the seeded demo users and takes a long time on a busy machine.
+
+### 23.5 Where this is likely to grow
 
 * Replace the lookup in `AuthService` in `user-service` with an identity-provider backed implementation (the users table
   already stores hashed passwords and an active flag).
@@ -509,3 +853,6 @@ Fine for a local demo; address before production.
 * Replace the shared HS256 secret with an identity provider and asymmetric (RS256/JWKS) validation.
 * Add `@Version` (optimistic locking) on `Claim`, or a database-level capacity guard.
 * Publish claim events (assigned, status changed) so workload can be pushed or cached rather than recomputed.
+* Page and filter claims on the server, and virtualise the list in the web app.
+* Move the session to an httpOnly cookie through a backend-for-frontend, and add refresh tokens.
+* A segregation-of-duties rule for staff-filed claims, and a way for the owner of an `ON_HOLD` claim to reply when they are staff.
