@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter, Router } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { fakeToken } from '../../testing/fake-token';
 import { LoginPage } from './login-page';
 
@@ -98,5 +98,59 @@ describe('LoginPage', () => {
 
     expect(password().type).toBe('text');
     expect(element().querySelector('button[aria-label="Hide password"]')).not.toBeNull();
+  });
+});
+
+describe('LoginPage links', () => {
+  function open(query: Record<string, string> = {}) {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(LoginPage);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  const link = (page: HTMLElement, text: string) =>
+    Array.from(page.querySelectorAll('a')).find((a) => a.textContent?.includes(text));
+
+  beforeEach(() => sessionStorage.clear());
+
+  it('links to the password reset and to creating a user, for someone who is not signed in', () => {
+    const page = open();
+
+    expect(link(page, 'Forgot password?')?.getAttribute('href')).toBe('/forgot-password');
+    expect(link(page, 'Create new user')?.getAttribute('href')).toBe('/register');
+  });
+
+  it('puts the forgot-password link inside the form and the sign-up link outside it', () => {
+    const page = open();
+
+    expect(page.querySelector('form')?.contains(link(page, 'Forgot password?') ?? null)).toBe(true);
+    expect(page.querySelector('form')?.contains(link(page, 'Create new user') ?? null)).toBe(false);
+  });
+
+  it.each([
+    ['registered', 'Your account is ready. Sign in with your new username and password.'],
+    ['password-reset', 'Your password was changed. Sign in with the new one.'],
+    ['expired', 'Your session has ended. Please sign in again.'],
+  ])('shows the notice for ?reason=%s', (reason, text) => {
+    const page = open({ reason });
+
+    expect(page.querySelector('.notice')?.textContent).toContain(text);
+  });
+
+  it('shows no notice for a reason it does not know, and none without one', () => {
+    expect(open({ reason: 'something-else' }).querySelector('.notice')).toBeNull();
+    TestBed.resetTestingModule();
+    expect(open().querySelector('.notice')).toBeNull();
   });
 });

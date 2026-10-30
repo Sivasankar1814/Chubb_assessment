@@ -3,7 +3,12 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { catchError, Observable, of, switchMap, tap, throwError } from 'rxjs';
 import { isRole, Role } from '../../models/enums';
-import { LoginRequest, TokenResponse } from '../../models/auth';
+import {
+  LoginRequest,
+  RegisterRequest,
+  ResetPasswordRequest,
+  TokenResponse,
+} from '../../models/auth';
 import { User } from '../../models/user';
 import { API_BASE_URL } from '../config/api-base-url';
 import { PUBLIC_REQUEST, SKIP_ERROR_NOTIFICATION } from '../http/http-context';
@@ -50,9 +55,10 @@ export class AuthService {
   }
 
   login(credentials: LoginRequest): Observable<User> {
-    const context = new HttpContext().set(PUBLIC_REQUEST, true).set(SKIP_ERROR_NOTIFICATION, true);
     return this.http
-      .post<TokenResponse>(`${this.apiBase}/auth/login`, credentials, { context })
+      .post<TokenResponse>(`${this.apiBase}/auth/login`, credentials, {
+        context: this.publicCall(),
+      })
       .pipe(
         tap((response) => this.startSession(response)),
         switchMap(() => this.loadProfile()),
@@ -61,6 +67,20 @@ export class AuthService {
           return throwError(() => err);
         }),
       );
+  }
+
+  /** Sign-up for anyone. No session starts: the new user signs in next, and the form shows the error itself. */
+  register(request: RegisterRequest): Observable<User> {
+    return this.http.post<User>(`${this.apiBase}/auth/register`, request, {
+      context: this.publicCall(),
+    });
+  }
+
+  /** Sets a new password from the username and the email on file; no session starts. */
+  resetPassword(request: ResetPasswordRequest): Observable<void> {
+    return this.http.post<void>(`${this.apiBase}/auth/reset-password`, request, {
+      context: this.publicCall(),
+    });
   }
 
   /** The token carries no user id, so every session starts by reading the profile. */
@@ -95,6 +115,11 @@ export class AuthService {
     this.storage.clear();
     this.sessionState.set(null);
     this.profile.set(null);
+  }
+
+  /** A call anyone may make: no bearer token, and the caller (a form) shows the failure, not a snackbar. */
+  private publicCall(): HttpContext {
+    return new HttpContext().set(PUBLIC_REQUEST, true).set(SKIP_ERROR_NOTIFICATION, true);
   }
 
   private startSession(response: TokenResponse): void {

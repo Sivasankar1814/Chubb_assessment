@@ -1,0 +1,159 @@
+<app-auth-frame
+  width="wide"
+  heading="Create new user"
+  lead="Register as a claimant, an officer or a manager. You can sign in straight away. Fields marked * are required."
+>
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    @if (submitting()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Creating your account" />
+    }
+
+    @if (formError(); as message) {
+      <div class="inline-error" role="alert">
+        <mat-icon aria-hidden="true">error_outline</mat-icon>
+        <div>
+          <span>{{ message }}</span>
+          @if (formDetails().length > 0) {
+            <ul>
+              @for (detail of formDetails(); track detail) {
+                <li>{{ detail }}</li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+    }
+
+    <h2 class="form-section">
+      <span class="icon-badge"><mat-icon aria-hidden="true">person</mat-icon></span>
+      Person details
+    </h2>
+    <div class="form-grid">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Full name</mat-label>
+        <input matInput formControlName="fullName" autocomplete="name" required />
+        @if (form.controls.fullName.hasError('required')) {
+          <mat-error>Enter your full name</mat-error>
+        } @else if (form.controls.fullName.hasError('maxlength')) {
+          <mat-error>Use at most 100 characters</mat-error>
+        } @else if (form.controls.fullName.hasError('server')) {
+          <mat-error>{{ form.controls.fullName.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Email</mat-label>
+        <input matInput type="email" formControlName="email" autocomplete="email" required />
+        @if (form.controls.email.hasError('required')) {
+          <mat-error>Enter an email address</mat-error>
+        } @else if (form.controls.email.hasError('email')) {
+          <mat-error>Enter a valid email address</mat-error>
+        } @else if (form.controls.email.hasError('maxlength')) {
+          <mat-error>Use at most 120 characters</mat-error>
+        } @else if (form.controls.email.hasError('server')) {
+          <mat-error>{{ form.controls.email.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Phone</mat-label>
+        <input matInput type="tel" formControlName="phone" autocomplete="tel" />
+        <mat-hint>Optional</mat-hint>
+        @if (form.controls.phone.hasError('pattern')) {
+          <mat-error>Use 7 to 20 digits; spaces, + and - are fine</mat-error>
+        } @else if (form.controls.phone.hasError('server')) {
+          <mat-error>{{ form.controls.phone.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+    </div>
+
+    <h2 class="form-section">
+      <span class="icon-badge"><mat-icon aria-hidden="true">badge</mat-icon></span>
+      Role
+    </h2>
+    <div class="form-grid">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Role</mat-label>
+        <mat-select formControlName="role" required>
+          @for (option of roles; track option) {
+            <mat-option [value]="option">{{ option | enumLabel }}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>
+          Claimants file and follow claims, officers review them, managers assign and oversee.
+        </mat-hint>
+      </mat-form-field>
+    </div>
+
+    <h2 class="form-section">
+      <span class="icon-badge"><mat-icon aria-hidden="true">key</mat-icon></span>
+      Sign-in
+    </h2>
+    <div class="form-grid">
+      <mat-form-field appearance="outline" class="full">
+        <mat-label>Username</mat-label>
+        <input matInput formControlName="username" autocomplete="username" required />
+        @if (form.controls.username.hasError('required')) {
+          <mat-error>Choose a username</mat-error>
+        } @else if (form.controls.username.hasError('maxlength')) {
+          <mat-error>Use at most 50 characters</mat-error>
+        } @else if (form.controls.username.hasError('server')) {
+          <mat-error>{{ form.controls.username.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Password</mat-label>
+        <input
+          matInput
+          formControlName="password"
+          autocomplete="new-password"
+          required
+          [type]="hidePassword() ? 'password' : 'text'"
+        />
+        <button
+          matIconButton
+          matSuffix
+          type="button"
+          [attr.aria-label]="hidePassword() ? 'Show passwords' : 'Hide passwords'"
+          [attr.aria-pressed]="!hidePassword()"
+          (click)="hidePassword.set(!hidePassword())"
+        >
+          <mat-icon>{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
+        </button>
+        <mat-hint>6 to 72 characters</mat-hint>
+        @if (form.controls.password.hasError('required')) {
+          <mat-error>Choose a password</mat-error>
+        } @else if (form.controls.password.hasError('minlength')) {
+          <mat-error>Use at least 6 characters</mat-error>
+        } @else if (form.controls.password.hasError('maxlength')) {
+          <mat-error>Use at most 72 characters</mat-error>
+        } @else if (form.controls.password.hasError('server')) {
+          <mat-error>{{ form.controls.password.getError('server') }}</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Confirm password</mat-label>
+        <input
+          matInput
+          formControlName="confirmPassword"
+          autocomplete="new-password"
+          required
+          [type]="hidePassword() ? 'password' : 'text'"
+        />
+        @if (form.controls.confirmPassword.hasError('required')) {
+          <mat-error>Enter the password again</mat-error>
+        } @else if (form.controls.confirmPassword.hasError('mismatch')) {
+          <mat-error>The passwords do not match</mat-error>
+        }
+      </mat-form-field>
+    </div>
+
+    <div class="form-actions">
+      <button matButton="filled" type="submit" class="submit" [disabled]="submitting()">
+        Create user
+      </button>
+    </div>
+  </form>
+</app-auth-frame>

@@ -4,6 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { provideRouter } from '@angular/router';
 import { fakeToken } from '../../testing/fake-token';
+import { PUBLIC_REQUEST, SKIP_ERROR_NOTIFICATION } from '../http/http-context';
 import { NotificationService } from '../notifications/notification-service';
 import { AuthService } from './auth-service';
 
@@ -199,5 +200,66 @@ describe('AuthService', () => {
 
     expect(auth.isAuthenticated()).toBe(false);
     expect(navigate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AuthService, for someone who is not signed in', () => {
+  beforeEach(() => sessionStorage.clear());
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
+  const SIGN_UP = {
+    username: 'nora',
+    password: 'secret123',
+    role: 'CLAIMANT' as const,
+    fullName: 'Nora Lim',
+    email: 'nora@example.com',
+  };
+
+  it('registers through the public endpoint, with the form showing the error and no session', () => {
+    const { auth, http } = setup();
+    let created: string | undefined;
+
+    auth.register(SIGN_UP).subscribe((user) => (created = user.username));
+    const request = http.expectOne('/api/auth/register');
+    request.flush({ ...OFFICER, username: 'nora' }, { status: 201, statusText: 'Created' });
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(SIGN_UP);
+    expect(request.request.context.get(PUBLIC_REQUEST)).toBe(true);
+    expect(request.request.context.get(SKIP_ERROR_NOTIFICATION)).toBe(true);
+    expect(created).toBe('nora');
+    expect(auth.isAuthenticated()).toBe(false);
+    expect(sessionStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it('resets a password through the public endpoint and starts no session', () => {
+    const { auth, http } = setup();
+    const body = { username: 'officer1', email: 'priya@example.com', newPassword: 'brandnew1' };
+    let done = false;
+
+    auth.resetPassword(body).subscribe(() => (done = true));
+    const request = http.expectOne('/api/auth/reset-password');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual(body);
+    expect(request.request.context.get(PUBLIC_REQUEST)).toBe(true);
+    expect(request.request.context.get(SKIP_ERROR_NOTIFICATION)).toBe(true);
+    expect(done).toBe(true);
+    expect(auth.isAuthenticated()).toBe(false);
+  });
+
+  it('hands a refusal to the caller untouched', () => {
+    const { auth, http } = setup();
+    let status: number | undefined;
+
+    auth
+      .resetPassword({ username: 'x', email: 'x@example.com', newPassword: 'brandnew1' })
+      .subscribe({ error: (err: { status: number }) => (status = err.status) });
+    http
+      .expectOne('/api/auth/reset-password')
+      .flush({ status: 409, message: 'no' }, { status: 409, statusText: 'Conflict' });
+
+    expect(status).toBe(409);
   });
 });

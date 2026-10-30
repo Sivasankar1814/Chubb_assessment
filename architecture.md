@@ -168,12 +168,25 @@ HTTP ─► JWT filter ─► controller ─► service ─► repository ─►
 
 ### 5.1 Authentication
 
-1. `POST /api/auth/login` (the only public API endpoint) goes to `user-service`.
+1. `POST /api/auth/login` goes to `user-service`. It is one of three public API endpoints; the other two, sign-up and
+   password reset, are described after this list.
 2. `AuthService` looks the user up, requires `active`, and checks the password against its BCrypt hash. Unknown user,
    wrong password and disabled account all return the same 401 message so usernames cannot be probed.
 3. `TokenService` signs an **HS256** JWT: `iss = chubb-claims-auth`, `sub = username`, `roles = [<ROLE>]`, `iat`,
    `exp` (default 120 minutes).
 4. The client sends `Authorization: Bearer <token>` on every later call.
+
+**Sign-up and password reset need no token** (added 2026-10-30, linked from the sign-in screen). Both are in `AuthService` and
+both are deliberately weak, by the user's choice (sections 22 and 23.1):
+
+* `POST /api/auth/register` creates an active account of **any role the visitor picks, `MANAGER` included**. It takes the
+  staff form's person, role and sign-in fields and nothing more (no `active`, `market`, policy number, specialization or
+  capacity), then calls `UserService.create`, so the duplicate-username 409 and the officer's default capacity are the same
+  as for a user a manager creates.
+* `POST /api/auth/reset-password` sets a new password for whoever names an **active** account and the **email registered
+  with it** (compared ignoring case and surrounding spaces). Nothing is mailed: there is no mail server. An unknown user, an
+  inactive account and a wrong email all give the same 409 message, like the login's one 401 message, so the response says
+  which part was wrong to nobody. Tokens already issued stay valid (there is no revocation).
 
 Every servlet service validates the token **locally** with the shared secret (`chubb.security.jwt.secret`, env
 `CHUBB_SECURITY_JWT_SECRET`): signature, issuer and expiry. There is no call back to `user-service` per request. Roles
@@ -184,7 +197,7 @@ in the `roles` claim become `ROLE_<name>` authorities.
 | Layer | Where | Examples |
 |-------|-------|----------|
 | Role gate | `@PreAuthorize` on controller methods (`@EnableMethodSecurity` in `common`) | assignment is `MANAGER` only; status update is `CLAIMANT`/`OFFICER`/`MANAGER` (the service narrows the claimant, see below); workload is `OFFICER`/`MANAGER` |
-| Ownership and state | service layer | a claimant sees only their own claims; officers can only update claims assigned to them (or pick up an unassigned `OPEN` one), while managers can update any claim, including reviewing an `OPEN` one with no officer; through the status endpoint a claimant can only answer an information request on their own claim (`UNDER_REVIEW`, 403 for any other status); claimants can read only their own profile; **officers can create a user of any role, `MANAGER` included** (so an officer can create an account more privileged than their own; only update and delete of users are manager-only), a deliberate product choice, not an oversight |
+| Ownership and state | service layer | a claimant sees only their own claims; officers can only update claims assigned to them (or pick up an unassigned `OPEN` one), while managers can update any claim, including reviewing an `OPEN` one with no officer; through the status endpoint a claimant can only answer an information request on their own claim (`UNDER_REVIEW`, 403 for any other status); claimants can read only their own profile; **officers can create a user of any role, `MANAGER` included** (so an officer can create an account more privileged than their own; only update and delete of users are manager-only), a deliberate product choice, not an oversight; **and anyone can sign up for any role without signing in** (section 5.1), also a deliberate choice |
 
 The full endpoint-by-role table is in the README.
 
@@ -200,8 +213,9 @@ The full endpoint-by-role table is in the README.
 
 ### 5.4 Public paths (every service)
 
-`/api/auth/login`, `/swagger-ui*`, `/v3/api-docs/**`, `/actuator/health/**`, `/actuator/info`, `/h2-console/**`, plus
-`OPTIONS`. CSRF is disabled (stateless bearer tokens, no cookies) and sessions are never created.
+`/api/auth/login`, `/api/auth/register`, `/api/auth/reset-password`, `/swagger-ui*`, `/v3/api-docs/**`,
+`/actuator/health/**`, `/actuator/info`, `/h2-console/**`, plus `OPTIONS`. (Only `user-service` has the three `/api/auth/`
+handlers; the list lives once, in `common`'s `SecurityConfig`.) CSRF is disabled (stateless bearer tokens, no cookies) and sessions are never created.
 
 ### 5.5 What the browser adds
 
@@ -443,8 +457,8 @@ frontend/src/app
 ├─ core/       singletons: auth (session, guards), http (interceptors, error parsing), config, notifications, theme
 ├─ models/     TypeScript shapes of the backend's DTOs and enums, and the currency table
 ├─ layout/     the shell: toolbar and side navigation
-├─ features/   auth, dashboard, claims, workload, profile, errors, users (each lazy-loaded)
-├─ shared/     brand mark, avatar, status chip, workload meter, state message, confirm dialog, pipes,
+├─ features/   auth (sign-in, create new user, reset password), dashboard, claims, workload, profile, errors, users (each lazy-loaded)
+├─ shared/     brand mark, auth frame, avatar, status chip, workload meter, state message, confirm dialog, pipes,
 │              validators, role directive, dates, money, policy number, load-state
 └─ testing/    test helpers (a fake JWT)
 ```
@@ -468,6 +482,7 @@ Every page is loaded lazily. Routes and who may reach them:
 | Route | Who | Guards |
 |-------|-----|--------|
 | `/login` | anyone not signed in | `guestGuard` sends a signed-in user to the dashboard |
+| `/register`, `/forgot-password` | anyone not signed in | `guestGuard`; linked from the sign-in screen ("Create new user", "Forgot password?"); top-level routes outside the shell, drawn by `AuthFrame` |
 | everything below, inside the shell | signed-in users | `authGuard`: loads the profile after a refresh; if it cannot, the session is dropped and the user goes to `/login` with the page they wanted |
 | `/dashboard`, `/profile` | all roles | none beyond sign-in |
 | `/claims`, `/claims/:id` | all roles | the server decides what each role sees |
@@ -495,6 +510,13 @@ has a page title.
 5. After signing in the user returns to that page. Only same-app paths are followed (`safeReturnUrl` drops absolute and
    protocol-relative URLs).
 6. The roles kept in the session choose what the UI shows. They are never the access check.
+7. **Before signing in.** The sign-in screen links to `/register` and `/forgot-password`. Both pages are public requests like
+   the login (no token, the form shows the failure) and **neither starts a session**: on success they go back to
+   `/login?reason=registered` or `/login?reason=password-reset`, which shows a notice, and the person signs in with the new
+   credentials. `/register` has the staff New user page's three sections (person, role, sign-in) and every role, without the
+   Active switch; a taken username lands on its field. `/forgot-password` asks for the username, the email on the account and a
+   new password. Both ask for the password twice, a check on the screen only (`sameAs`). The sign-in screen stays exactly one
+   screen with the two links added; these two pages are taller and may scroll.
 
 ## 14. Frontend: HTTP layer and errors
 
@@ -523,8 +545,9 @@ and the slimmer 401 body, so the UI shows the server's own wording.
   one request as loading, ready or failed, so each page shows a progress bar with skeleton placeholders, an error with a
   retry, or an empty state, never a blank page.
 * **Forms** are typed reactive forms. Validators live in `shared/validators` (not blank, not in the future, an amount whose
-  decimals follow the market's currency). A server error is attached to the control it names, and a taken username is shown
-  on the username field. The creation forms are guarded against accidental navigation.
+  decimals follow the market's currency, a phone number, "confirm password"). A server error is attached to the control it
+  names, and a taken username is shown on the username field. The staff creation forms are guarded against accidental
+  navigation.
 * **Names for ids.** A claim holds only user ids. `UserDirectory` lists the users once for staff and keeps the result, which
   turns an officer id into a name; claimants get an empty directory and see "an officer is handling this claim".
 * **Lists** (claims) are fetched whole and filtered, sorted and paged in the browser: the API has no paging.
@@ -583,7 +606,7 @@ their market's currency.
 | Layer | Tool | What it covers |
 |-------|------|----------------|
 | Unit | Vitest, `*.spec.ts` beside the code | API error parsing, session timing, both interceptors, the guards, the workflow rules, validators, currency and money, the policy-number rule, and the login, status, New claim and New user screens |
-| End to end | Playwright against the real stack, in the Edge that ships with Windows (`E2E_BROWSER` for Chrome, `E2E_BASE_URL` for a running build) | `access` (who sees what), `lifecycle` (one claim through every status across the three roles), `manager` (a manager runs the workflow with no officer), `currency` (the currency follows the market), `users` (registration) |
+| End to end | Playwright against the real stack, in the Edge that ships with Windows (`E2E_BROWSER` for Chrome, `E2E_BASE_URL` for a running build) | `access` (who sees what), `lifecycle` (one claim through every status across the three roles), `manager` (a manager runs the workflow with no officer), `currency` (the currency follows the market), `users` (registration by staff), `public-auth` (creating a user and resetting a password from the sign-in screen) |
 
 The end-to-end tests file their own claims and register their own `e2e-` users (deleted again at the end), so they can be
 re-run without restarting the backend; the claims they leave behind are closed, so no officer is left at capacity, and they
@@ -633,6 +656,31 @@ sequenceDiagram
     GW->>US: forward unchanged
     US-->>W: profile (id, name, market, policy number, ...)
     W-->>U: the dashboard for their role
+```
+
+Signing up is the same shape, with `POST /api/auth/register` in the middle and no profile read afterwards.
+
+### 20.1a Setting a new password without signing in
+
+```mermaid
+sequenceDiagram
+    actor U as Visitor
+    participant W as Angular app
+    participant GW as api-gateway
+    participant US as user-service
+
+    U->>W: username, email on the account, new password (twice)
+    W->>W: the two passwords must match (screen check only)
+    W->>GW: POST /api/auth/reset-password (public request, no token)
+    GW->>US: forward unchanged
+    alt active account and the email matches
+        US->>US: store the BCrypt hash of the new password
+        US-->>W: 204 No Content
+        W-->>U: the sign-in screen with a notice
+    else unknown user, inactive account or wrong email
+        US-->>W: 409 "Those details do not match an active account"
+        W-->>U: the same message in the form
+    end
 ```
 
 ### 20.2 Filing a claim
@@ -712,6 +760,8 @@ Each of these was chosen deliberately, several of them against the first design,
 | **A claim's market is chosen when it is filed, not stored on the user** | A person can file in more than one market, and a new user should need nothing more than a name and a login | `Claim.market`; optional `users.market`; a profile that has one still locks it (sections 6.1 and 16) |
 | **Everyone files in their own name**, officers and managers included | One screen and one request for every role, with no claimant picker | `ClaimService.resolveClaimant` (section 7); `claim-create-page` |
 | **Officers may create users of any role, `MANAGER` included** | A product choice. It means an officer can create an account more privileged than their own | `UserService.create` has no caller check; section 5.2 |
+| **Anyone can sign up for any role without signing in, `MANAGER` included** | Asked for on 2026-10-30, with the consequence stated: a visitor can make themselves a manager. A claimant-only sign-up was offered and declined | `AuthService.register`; `/register` (sections 5.1, 13 and 23.1) |
+| **A password is reset from a username and the email on file** | Asked for on 2026-10-30. No mail server exists, so nothing can be mailed. A single-use reset link was offered and declined; the email is not a secret, so this is weak by design | `AuthService.resetPassword`; `/forgot-password` (sections 5.1, 13 and 23.1) |
 | **An officer gets a default capacity of 5 when none is given** | Capacity runs assignment and workload; a missing one reads as 0 and the officer would be "full" for good | `UserService.DEFAULT_OFFICER_CAPACITY`; the New user page asks for nothing |
 | **The policy number is decided by the server** | Nobody types it, and it cannot be faked | `ClaimService.policyNumberFor`; preview in `shared/policy-number.ts` (section 16) |
 | **A manager can work a claim with no officer** | A manager is not blocked on assignment | `ClaimStatus` allows `OPEN` to `UNDER_REVIEW` (section 7) |
@@ -726,7 +776,17 @@ Fine for a local demo; address before production.
 * The default JWT secret is in the source. Set `CHUBB_SECURITY_JWT_SECRET` (same value in user, claim and workload).
 * `/h2-console/**` is on the public path list of every service and the H2 console is enabled by default. Disable both
   outside local use (the `mysql` profile turns the console off, but the path stays permitted).
-* No token revocation, refresh tokens or self-service password change.
+* No token revocation, refresh tokens or password change for a signed-in user. A token issued before a password reset stays
+  valid until it expires.
+* **Anyone can create an account of any role, `MANAGER` included, with no sign-in, verification or limit** (`POST
+  /api/auth/register`). A visitor can make themselves a manager and then approve, reject and settle claims and create more
+  users, and anyone can fill the user table. A claimant-only sign-up, approval by a manager and email verification would close
+  it; none is built, by the user's choice.
+* **The password reset is proved only by the username and the email on the account** (`POST /api/auth/reset-password`).
+  Anyone who knows or guesses both can set that account's password, officers and managers included, and nothing is mailed.
+  Usernames and emails are not secrets (the demo ones are in this repository). A single-use token mailed to the address would
+  fix it and needs a mail server. A wrong guess costs nothing: there is no rate limiting or lockout.
+* Sign-up answers 409 for a taken username, so usernames can be probed through it (the login's single message does not).
 * The gateway has no rate limiting or CORS configuration.
 * Demo credentials are seeded on first start; set `chubb.seed-demo-users=false` and `chubb.seed-demo-claims=false` in
   production (the demo claims reference the demo user ids).

@@ -17,6 +17,21 @@
   },
 
   "users": {
+    "signUp": {
+      "call": "POST /api/auth/register  (public, no token; any role, MANAGER included)  -> 201, can log in at once",
+      "body": {
+        "username": "nora",
+        "password": "secret123",
+        "role": "CLAIMANT",
+        "fullName": "Nora Lim",
+        "email": "nora@example.com",
+        "phone": "+65 9123 4567"
+      }
+    },
+    "resetPassword": {
+      "call": "POST /api/auth/reset-password  (public, no token; username + the email registered with it)  -> 204",
+      "body": { "username": "nora", "email": "nora@example.com", "newPassword": "another123" }
+    },
     "createClaimant": {
       "call": "POST /api/users  (OFFICER or MANAGER)",
       "body": {
@@ -256,6 +271,14 @@
     "wrongPassword": {
       "call": "POST /api/auth/login  -> 401 Invalid username or password",
       "body": { "username": "claimant1", "password": "wrong" }
+    },
+    "resetWithWrongEmail": {
+      "call": "POST /api/auth/reset-password  -> 409 Those details do not match an active account (the same message for an unknown user or an inactive account)",
+      "body": { "username": "claimant1", "email": "not.their.email@example.com", "newPassword": "another123" }
+    },
+    "signUpWithTakenUsername": {
+      "call": "POST /api/auth/register  -> 409 User with username 'claimant1' already exists",
+      "body": { "username": "claimant1", "password": "secret123", "role": "CLAIMANT", "fullName": "Copy Cat", "email": "copy@example.com" }
     },
     "claimantCannotAssign": "PUT /api/claims/{id}/assignment as claimant1  -> 403",
     "officerNotAssigned": "PATCH /api/claims/{id}/status as officer2 on a claim assigned to officer1  -> 403 Claim is not assigned to you",

@@ -10,6 +10,20 @@ export const routes: Routes = [
     canActivate: [guestGuard],
     loadComponent: () => import('./features/auth/login-page').then((m) => m.LoginPage),
   },
+  // The two pages the sign-in screen links to: open to anyone not signed in, like the login itself.
+  {
+    path: 'register',
+    title: 'Create new user · Claims Management',
+    canActivate: [guestGuard],
+    loadComponent: () => import('./features/auth/register-page').then((m) => m.RegisterPage),
+  },
+  {
+    path: 'forgot-password',
+    title: 'Reset password · Claims Management',
+    canActivate: [guestGuard],
+    loadComponent: () =>
+      import('./features/auth/forgot-password-page').then((m) => m.ForgotPasswordPage),
+  },
   {
     path: '',
     canActivate: [authGuard],

@@ -15,11 +15,9 @@ import { Role, ROLES } from '../../models/enums';
 import { CreateUserRequest } from '../../models/user';
 import { EnumLabel } from '../../shared/pipes/enum-label-pipe';
 import { notBlank } from '../../shared/validators/claim-validators';
+import { PHONE_PATTERN } from '../../shared/validators/user-validators';
 import { UserDirectory } from './user-directory';
 import { UsersApi } from './users-api';
-
-/** The backend's pattern for a phone number. */
-const PHONE = /^\+?[0-9\- ]{7,20}$/;
 
 @Component({
   selector: 'app-user-create-page',
@@ -54,7 +52,7 @@ export class UserCreatePage implements HasUnsavedChanges {
   protected readonly form = inject(NonNullableFormBuilder).group({
     fullName: ['', [Validators.required, notBlank, Validators.maxLength(100)]],
     email: ['', [Validators.required, Validators.email, Validators.maxLength(120)]],
-    phone: ['', [Validators.pattern(PHONE)]],
+    phone: ['', [Validators.pattern(PHONE_PATTERN)]],
     role: ['CLAIMANT' as Role],
     username: ['', [Validators.required, notBlank, Validators.maxLength(50)]],
     password: ['', [Validators.required, Validators.minLength(6), Validators.maxLength(72)]],

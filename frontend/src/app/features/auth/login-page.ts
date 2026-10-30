@@ -5,7 +5,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth-service';
 import { safeReturnUrl } from '../../core/auth/return-url';
 import { toApiProblem } from '../../core/http/api-problem';
@@ -38,6 +38,8 @@ const DEMO_ACCOUNTS: readonly DemoAccount[] = ngDevMode
 const NOTICES: Record<string, string> = {
   expired: 'Your session has ended. Please sign in again.',
   unavailable: "We couldn't load your profile. Please sign in again.",
+  registered: 'Your account is ready. Sign in with your new username and password.',
+  'password-reset': 'Your password was changed. Sign in with the new one.',
 };
 
 @Component({
@@ -49,6 +51,7 @@ const NOTICES: Record<string, string> = {
     MatButtonModule,
     MatIconModule,
     MatProgressSpinnerModule,
+    RouterLink,
     BrandMark,
   ],
   templateUrl: './login-page.html',

@@ -71,6 +71,12 @@ JWT-protected: log in first.
 
 * `POST /api/auth/login` (public, through the gateway on :8080) returns a JWT (default 120 minutes). Send it as
   `Authorization: Bearer <token>`. `common`'s `SecurityConfig` validates it; only `user-service` signs tokens.
+* **Two more public endpoints** (2026-10-30, `AuthController`, listed in `common`'s `SecurityConfig.PUBLIC_PATHS` beside the login):
+  `POST /api/auth/register` (201; `username, password, role, fullName, email, phone`; the account is always active, an officer gets
+  `DEFAULT_OFFICER_CAPACITY`; `AuthService.register` delegates to `UserService.create`, so the duplicate-username 409 is shared) and
+  `POST /api/auth/reset-password` (204; `username, email, newPassword`). The web app's `/register` and `/forgot-password` pages call
+  them, from links on the login page. **Both are deliberately weak, by the user's choice, and must not be "fixed" without asking**
+  (see the Security rule below).
 * Swagger UI (http://localhost:8080/swagger-ui.html): pick **user-service**, run the login, click **Authorize**, paste the
   token without `Bearer `. The login is remembered across reloads (`springdoc.swagger-ui.persist-authorization` in
   `api-gateway/src/main/resources/application.yml`); click **Logout** in the dialog before switching user.
@@ -161,7 +167,14 @@ always on PATH (`scripts\start-frontend.ps1` handles that).
 * **Security:** roles are `CLAIMANT`, `OFFICER`, `MANAGER`. **Officers may create users of any role, `MANAGER` included**
   (`UserService.create` has no caller check; the controller gate is `OFFICER`/`MANAGER`): the user asked for this on
   2026-10-29, knowing an officer can thereby create an account more privileged than their own. Do not "fix" it without asking.
-  Update and delete of users stay manager-only. Use `@PreAuthorize("hasRole(..)")` for role gates; ownership
+  **Anyone can sign up for any role without signing in, `MANAGER` included** (`POST /api/auth/register`), and **anyone who knows
+  an account's username and the email on file can set its password** (`POST /api/auth/reset-password`, officers and managers
+  too; `AuthService.resetPassword`): asked for on 2026-10-30. The user was told that a visitor can thereby make themselves a
+  manager, and that an email address is not a secret, and chose both over a claimant-only sign-up and a single-use reset link.
+  Do not tighten either without asking. The reset gives one message for an unknown user, an inactive account and a wrong email
+  (409, like the login's bad-credentials message), does not reactivate an inactive account, and leaves tokens already issued
+  valid (there is no revocation). There is no rate limit, captcha or email verification. Update and delete of users stay
+  manager-only. Use `@PreAuthorize("hasRole(..)")` for role gates; ownership
   rules (claimant sees only their own data, officers only update claims assigned to them) belong in the service layer.
   `claim-service` passes a framework-free `Caller` record into services to keep them unit-testable.
 * **Claim workflow** is defined once in `ClaimStatus.canTransitionTo`. Every state change must write a
@@ -226,6 +239,11 @@ always on PATH (`scripts\start-frontend.ps1` handles that).
 * **The New claim page is one page for every role.** The claimant's name is the signed-in user's, and the request never
   carries a `claimantId` or a `policyNumber` (the server decides the policy number; the page only previews it). A claimant
   whose profile has a market sees it locked; everyone else chooses it. Do not give staff a different form.
+* **The sign-in screen links to two public pages**, `/register` ("Create new user") and `/forgot-password`, top-level routes
+  behind `guestGuard` and outside the shell, built on `AuthFrame` (theme tokens, may scroll; only the login page is held to one
+  screen). Their calls are `AuthService.register` and `AuthService.resetPassword` (public, no session started, the form shows
+  the error itself). The register form mirrors the staff New user form (person, role, sign-in) without the Active toggle, and
+  both pages ask to confirm the password; the confirmation is a screen check only.
 * **Every `<form (ngSubmit)>` needs a `[formGroup]`** (or `FormsModule`). Without one nothing handles the submit event and
   the browser reloads the page. This broke the status dialog once; `status-change-dialog.spec.ts` fires a real submit event
   to guard it.
@@ -342,6 +360,8 @@ Web app:
 
 * One `users` table in `user-service` holds claimants, officers and managers (single `User` entity; the role decides which profile columns apply). No refresh tokens / token revocation / self-service password change.
 * The JWT secret has a built-in demo default; every service must share the same `CHUBB_SECURITY_JWT_SECRET` outside local use.
+* Open sign-up for every role and a password reset proved only by username and email (see the Security rule): no email is
+  ever sent, there is no verification, rate limiting or token revocation.
 * No service discovery: services and the gateway call each other at fixed URLs (`services.<name>.url`, defaulting to localhost:8081-8084).
 * The web app fetches the claims list whole and filters, sorts and pages it in the browser (the API has no paging), and the
   session is the JWT in `sessionStorage` with no refresh token: it ends at the token's expiry.

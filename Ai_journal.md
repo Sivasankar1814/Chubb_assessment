@@ -26,7 +26,7 @@ of the current system use the current names.
 | | |
 |---|---|
 | **Delivered, backend** | Five-module Maven build: reactive API gateway (8080, no `common`), `user-service` (8081), `claim-service` (8083), stateless `workload-service` (8084, no DB) and a shared `common` library. Java 21, Spring Boot 3.3.5, Spring Cloud 2023.0.3 (Gateway, OpenFeign), Spring Security with JWT, JPA on in-memory H2 by default or MySQL (`--spring.profiles.active=mysql`), Swagger UI. |
-| **Delivered, web app** | Angular 22 single-page app (standalone components, signals, zoneless) with Angular Material 3: sign-in, a dashboard per role, claims list and detail, filing a claim, status and assignment dialogs, information requests and replies, officer workload, user registration, a profile page, light and dark themes, and a layout that works from a 390px phone to a desktop. It reaches the backend only through the gateway. |
+| **Delivered, web app** | Angular 22 single-page app (standalone components, signals, zoneless) with Angular Material 3: sign-in, creating a user and resetting a password from the sign-in screen, a dashboard per role, claims list and detail, filing a claim, status and assignment dialogs, information requests and replies, officer workload, user registration, a profile page, light and dark themes, and a layout that works from a 390px phone to a desktop. It reaches the backend only through the gateway. |
 | **Business scope** | Claim submission in six APAC markets, assignment to officers, a status workflow with an audit trail, role-based access for claimants, officers and managers, an officer workload calculation, and per-market currency display. |
 | **How AI was used** | Scaffolding and implementation from a written brief, then iterative debugging and behaviour changes driven by short, concrete prompts, on the backend first and on the web app and both together afterwards. |
 | **How it was kept in check** | A standing rules file (`CLAUDE.md`) the AI reads each session, plan-first for multi-file changes, automated tests with every behaviour change (JUnit on the backend, Vitest and Playwright on the web app), a live check through the gateway, and looking at the running UI in a browser. |
@@ -179,7 +179,7 @@ On 2026-10-28 the app's look was rebuilt as a design system, rather than restyle
 ## 10. Phase 8: Product changes driven by the user
 
 Short requests, each with the same loop: reproduce or read the code first, say what was found, change the smallest thing
-that does it, add a test, check it in the running system. Dates are 2026-10-28 and 2026-10-29. Five of these needed a
+that does it, add a test, check it in the running system. Dates are 2026-10-28 to 2026-10-30. Six of these needed a
 backend change, each authorised and planned first.
 
 | Request (paraphrased) | What was found | Change | Checked by |
@@ -194,6 +194,7 @@ backend change, each authorised and planned first.
 | "I don't need the Officer details section." | **Backend change 4.** Capacity is load-bearing: `claim-service` and `workload-service` read `int maxCapacity`, so a missing one is 0 and the officer could never take a claim. Removing the form section alone would have broken assignment. | Specialization is optional and display only, capacity defaults to 5 (`DEFAULT_OFFICER_CAPACITY`) | A live check: an officer created with no details gets capacity 5 and can be assigned a claim |
 | "The Policy Number should fill itself in on New claim." | **Backend change 5.** A claim had no policy number. | `claims.policy_number`, decided only by `ClaimService.policyNumberFor` (the profile's number, else `POL-<MARKET>-<user id padded to 4>`); the page shows a read-only preview from a mirror of the rule. **One table of examples sits in both `ClaimServiceTest` and `policy-number.spec.ts`**: change them together. | Both tests, and a live check that the number on the form equals the one on the claim page |
 | "The login page scrolls vertically; I want a single page." | Measured, not guessed: `.login` used `min-height: 100dvh` and the brand column alone needed 883px, so any window shorter than that scrolled (most laptop windows are 650-800px). | `height: 100dvh`, spacing in `clamp()`, decoration dropped by window height, and the form panel as the only thing that may scroll | A script compares `scrollHeight` with `innerHeight` at 12 window sizes from 1920x960 to 360x600, in light and dark, with the error banner showing |
+| "Add a Create New User link on the login page, like the New user page staff see after signing in, and a Forgot Password link, so people can reset a password without logging in." (2026-10-30) | Both need **public backend endpoints**: everything under `/api` except the login needed a token. So it was planned first, with the consequences stated. A public sign-up that offers every role lets any visitor make themselves a manager. A reset needs proof of ownership, there is no mail server, and the only proof available is data an attacker may know. The user was offered a claimant-only sign-up and a single-use reset link, and **chose every role and a username plus the email on file**. **Backend change 6.** | `POST /api/auth/register` (any role, always active) and `POST /api/auth/reset-password` (one generic 409 for an unknown user, an inactive account and a wrong email, so it says which part was wrong to nobody); `/register` and `/forgot-password` pages on a shared `AuthFrame`; two links on the login page, which stays one screen. Recorded in `CLAUDE.md` as "do not tighten without asking", and in the limitations below. | Backend service, controller and integration tests (including that listing the endpoints opened nothing else); a live check through the gateway; frontend unit tests and seven new e2e tests; the login page measured at 12 window sizes in light and dark, and all three pages at 390, 820 and 1440px |
 | "Change the login headline to something more professional." | The first rewrite wrapped to three lines. | "Claims resolved with clarity and control." and a one-sentence lede | Looked at in Edge at desktop and phone size |
 
 ### The New claim saga
@@ -233,7 +234,7 @@ on a staff-owned claim can only be closed, because the reply path belongs to cla
   behaviour change, and `./mvnw clean install` must stay green.
 - **Automated tests, web app:** Vitest unit tests next to the code (guards, interceptors, pipes, the workflow and
   policy-number mirrors, dialogs and pages), and Playwright end-to-end specs in Edge against the real backend
-  (`access`, `currency`, `lifecycle`, `manager`, `users`). Each e2e test files its own claim so runs repeat; a serial
+  (`access`, `currency`, `lifecycle`, `manager`, `users`, `public-auth`). Each e2e test files its own claim so runs repeat; a serial
   lifecycle spec shares one claim across roles on purpose.
 - **Live check:** `/actuator/health` returns 200 on 8080, 8081, 8083 and 8084, then a login through the gateway and the
   affected endpoints. For example, `GET /api/workload` as a manager crosses services and exercises the gateway,
@@ -262,6 +263,8 @@ on a staff-owned claim can only be closed, because the reply path belongs to cla
 | **A clipped heading.** On the phone login, a negative margin pulled the card above a scroll container, where it was clipped. | Do not pull content above a scroll container with a negative margin; move the container instead. |
 | **A headline that wrapped to three lines.** | Reword, then look at it at narrow widths before calling it done. |
 | **A risky stop recipe.** The early docs and habits killed every Java process, which on this machine also takes down IntelliJ. | Match the service command line instead; the recipe is in `CLAUDE.md` and the README. |
+| **A test that did not test what its name said.** For the public reset, the first draft of an integration test was called "the seeded manager can be reset too" and only sent a guessed email and expected a refusal. It could not fail for the reason it claimed. | Reread the tests before running them. It was replaced by one that registers a manager and resets that account, so the seeded users, which other tests share, keep their passwords. |
+| **A validator that judged before it could.** "Confirm password" compared against a sibling control, but a control is validated when it is built, before it is in its group, so it saw no sibling and failed a matching pair. A unit test caught it. | A validator that needs a neighbour passes until it has one, and the neighbour's changes must re-run it. Both are now tested, including a case that has to fail. |
 | **A form change that would have broken assignment.** Removing the Officer details section looked frontend-only. | Check what reads a field before removing it: capacity was `int` downstream, so null meant 0 and a permanently full officer. |
 
 ## 14. Known limitations
@@ -288,12 +291,16 @@ is `architecture.md` section 23.
 - **The claims list is fetched whole** and filtered, sorted and paged in the browser, because the API has no paging.
 - **Currency is a label, not a conversion.** The backend stores a bare amount and the claim's market says which currency
   it is in.
-- **Two accepted gaps from product decisions:** staff can approve or settle a claim they filed themselves, and an officer
-  can create a manager account.
-- **Not exercised end to end:** the Docker image for the web app has not been built or run, and the full Playwright suite
-  was not completed in one clean run after the last round of changes (the specs touched by them were run on their own).
-  The suite needs the nine seeded users and the demo claims; it fails against the three-user, no-claims state the
-  system was last left in at the user's request.
+- **Accepted gaps from product decisions:** staff can approve or settle a claim they filed themselves; an officer can create
+  a manager account; **anyone can sign up for any role, a manager included, without signing in; and anyone who knows an
+  account's username and the email on file can set its password, a manager's too.** Nothing is mailed, and there is no
+  verification, rate limit or lockout. A claimant-only sign-up and a mailed single-use link were offered and declined; they are
+  the fixes, and the second needs a mail server. A token issued before a reset stays valid, and a taken username on the
+  sign-up page reveals that the user exists.
+- **Not exercised end to end:** the Docker image for the web app has not been built or run. The full Playwright suite
+  passed in one run (all 49 tests, on a quiet machine, against the seeded data) on 2026-10-30, after the sign-in screen
+  changes; before that it had not been completed in one clean run since the New claim work. It needs the nine seeded users
+  and the demo claims, so it fails against the three-user, no-claims state the system is left in at the user's request.
 
 Suggested next steps: optimistic locking on claims, an identity provider with asymmetric token validation and a refresh
 flow, server-side paging for the claims list, service discovery, and retries and circuit breakers on Feign calls.
@@ -321,11 +328,17 @@ flow, server-side paging for the claims list, service discovery, and retries and
 - **Measure layout, do not eyeball it.** Comparing `scrollHeight` with `innerHeight` across window sizes found the cause of
   the scrolling login page that looking at one window had missed.
 - **Check what depends on a field before removing it from a form.** The UI is rarely the only reader.
-- **Say when a request would change a rule, and record the answer.** The two accepted gaps are in `CLAUDE.md` with "do not
-  fix without asking", so a later session does not quietly undo a decision the user made knowingly.
+- **Say when a request would change a rule, and record the answer.** The accepted gaps are in `CLAUDE.md` with "do not fix
+  without asking", so a later session does not quietly undo a decision the user made knowingly.
+- **A public endpoint's reach is everyone's.** The sign-in screen links looked like two small UI requests; each needed an
+  endpoint anyone can call. Naming what a stranger could do with it (become a manager, take over an account) before building,
+  and offering the safer option, is what made the choice the user's. They took the weaker option, it is built as asked, and
+  the tests pin both what it does and that it opens nothing else.
 - **A test must be able to fail.** Pair every "does not contain" with a "does contain".
-- **Say what was not verified.** The Docker image and a full clean end-to-end run are listed as gaps above rather than
-  assumed to work.
+- **Say what was not verified, and close the gap when the next change makes it cheap.** The Docker image and a full clean
+  end-to-end run were listed as gaps rather than assumed to work. The next change needed a backend rebuild, which reseeded
+  the demo data, so the full suite was run then (49 of 49) and the three-user state restored afterwards. The Docker image is
+  still a gap.
 
 ## 16. Related files
 

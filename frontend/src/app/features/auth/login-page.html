@@ -110,6 +110,8 @@
           }
         </mat-form-field>
 
+        <a class="forgot" routerLink="/forgot-password">Forgot password?</a>
+
         <button matButton="filled" type="submit" class="submit" [disabled]="submitting()">
           @if (submitting()) {
             <mat-progress-spinner mode="indeterminate" diameter="20" aria-label="Signing in" />
@@ -120,6 +122,8 @@
           }
         </button>
       </form>
+
+      <p class="signup">New here? <a routerLink="/register">Create new user</a></p>
 
       @if (demoAccounts.length > 0) {
         <div class="demo">

@@ -424,6 +424,32 @@ form {
   }
 }
 
+// The two ways in for someone with no account or no password. Small and close to what they belong to, so the
+// one-screen page gains only a couple of short lines.
+.forgot {
+  align-self: flex-end;
+  margin: -6px 0 clamp(6px, 1.5vh, 12px);
+}
+
+.signup {
+  margin: clamp(10px, 2.5vh, 18px) 0 0;
+  text-align: center;
+  color: var(--app-muted);
+  font: var(--mat-sys-body-medium);
+}
+
+.forgot,
+.signup a {
+  color: var(--mat-sys-primary);
+  font: var(--mat-sys-label-large);
+  text-decoration: none;
+  border-radius: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .demo {
   margin-top: clamp(12px, 3.5vh, 28px);
 }
