@@ -37,8 +37,10 @@ changing the code are in [CLAUDE.md](CLAUDE.md); how it was built with AI assist
 
 | | |
 |---|---|
-| ![The sign-in screen: a brand panel on the left, the sign-in form with demo-account buttons on the right](docs/screens/login.png) | ![A claim page as a manager sees it: details, who handles it, the next action, and the history timeline from submission to approval](docs/screens/claim.png) |
-| **Sign-in.** One screen on any window size; the demo-account buttons appear in development builds only. | **A claim.** Details, handler, next action and the full audit trail, including an information request and the claimant's reply. |
+| ![The sign-in screen: a brand panel on the left, the sign-in form on the right with Forgot password and Create new user links and demo-account buttons](docs/screens/login.png) | ![A claim page as a manager sees it: details, who handles it, the next action, and the history timeline from submission to approval](docs/screens/claim.png) |
+| **Sign-in.** One screen on any window size, with **Forgot password?** and **Create new user** links; the demo-account buttons appear in development builds only. | **A claim.** Details, handler, next action and the full audit trail, including an information request and the claimant's reply. |
+| ![Create new user, reached from the sign-in screen with no account: person details, role and sign-in on one page, with the password confirmed](docs/screens/register.png) | ![Reset your password, reached from the sign-in screen: username, the email on the account and a new password, entered twice](docs/screens/forgot-password.png) |
+| **Create new user.** Open to anyone from the sign-in screen: person, role and sign-in, with the password asked for twice. Every role is on offer, by choice (see [Web app](#web-app)). | **Reset your password.** The username, the email the account was registered with and a new password. Nothing is mailed; see [Web app](#web-app) for what that means. |
 
 ![The officer workload page: active officers, open claims and capacity left, and one officer's load against capacity](docs/screens/workload.png)
 
@@ -231,6 +233,22 @@ own in development: its `/api` proxy points at the gateway on 8080 (`frontend/pr
 default. Send it as `Authorization: Bearer <token>` on every other call through the gateway. How tokens are issued and
 validated is described in [architecture.md](architecture.md#5-security).
 
+Two more calls need no token, and are what the web app's **Create new user** and **Forgot password?** pages use:
+
+```bash
+# Sign up as any role (CLAIMANT, OFFICER or MANAGER); 201, and the account can log in at once
+curl -s -X POST http://localhost:8080/api/auth/register -H "Content-Type: application/json" \
+  -d '{"username":"nora","password":"secret123","role":"CLAIMANT","fullName":"Nora Lim","email":"nora@example.com"}'
+
+# Set a new password from the username and the email the account was registered with; 204.
+# An unknown user, an inactive account and a wrong email all answer 409 "Those details do not match an active account"
+curl -s -X POST http://localhost:8080/api/auth/reset-password -H "Content-Type: application/json" \
+  -d '{"username":"nora","email":"nora@example.com","newPassword":"another123"}'
+```
+
+Both are weak on purpose (anyone can sign up as a manager; a username and an email are enough to reset a password): see
+[architecture.md](architecture.md#231-security).
+
 #### Swagger UI
 
 * **Aggregated, via the gateway:** http://localhost:8080/swagger-ui.html.
@@ -249,6 +267,8 @@ validated is described in [architecture.md](architecture.md#5-security).
 | `PUT /api/claims/{id}/assignment`          | ✖                | ✖                              | ✔       |
 | `PATCH /api/claims/{id}/status`            | own claim, only to answer an information request | only claims assigned to them | ✔ |
 | `POST /api/auth/login`                     | ✔ (public)       | ✔ (public)                     | ✔ (public) |
+| `POST /api/auth/register`                  | ✔ (public, any role) | ✔ (public, any role)       | ✔ (public, any role) |
+| `POST /api/auth/reset-password`            | ✔ (public, username + email) | ✔ (public, username + email) | ✔ (public, username + email) |
 | `GET /api/users/me`, `/api/users/{id}`     | own profile only | any user                       | any user |
 | `GET /api/users?role=&active=`             | ✖                | ✔                              | ✔       |
 | `POST /api/users`                          | ✖                | any role (including `MANAGER`) | any role |
@@ -342,6 +362,14 @@ users; a production build does not contain them.
   The table is `models/currency.ts`. There is **no conversion between currencies**: the backend stores the bare amount and has
   no currency field or exchange rates, so the market says which currency an amount is in. Amounts stored before this (the demo
   claims) are read as being in their market's currency.
+* **Create new user and Forgot password, without signing in.** The sign-in screen links to both (**Forgot password?** under
+  the password, **Create new user** under the button). **Create new user** (`/register`) is the staff New user form (person,
+  role, sign-in) with every role on offer and the password asked for twice; it signs nobody in, it sends them back to the
+  sign-in screen with a notice. **Forgot password?** (`/forgot-password`) asks for the username, the email the account was
+  registered with and a new password (twice), and sets it. **Both are deliberately weak, by choice:** anyone can sign up as a
+  manager, and anyone who knows a username and its email can reset that password, officers and managers included. Nothing is
+  mailed (there is no mail server), and there is no rate limit or verification. See [CLAUDE.md](CLAUDE.md) and
+  [architecture.md](architecture.md#231-security).
 * **Users.** Staff can list users (**Users** in the side navigation) and register new ones (**New user**). The form is
   **Person details**, then a **Role** dropdown (Claimant, Officer or Manager), then the sign-in; no role adds a section of its
   own. An officer is registered with the server's default capacity of **5 open claims** and no specialization (the backend
@@ -364,7 +392,8 @@ users; a production build does not contain them.
 ### Tests
 
 * **Unit** (`*.spec.ts` beside the code, Vitest): API error parsing, auth and session timing, both interceptors, guards, the
-  workflow rules, validators, currency and the policy-number rule, and the login, status, New claim and New user screens.
+  workflow rules, validators, currency and the policy-number rule, and the login, Create new user, Forgot password, status,
+  New claim and New user screens.
 * **End to end** (`e2e/`, Playwright): drive a real browser against the real stack, using the demo users. One spec walks a
   claim through the whole lifecycle across all three roles. Start the backend, then `npm run e2e`. It uses the Edge that
   ships with Windows (no browser download); set `E2E_BROWSER=chrome` for Chrome, or `E2E_BASE_URL` to test an
